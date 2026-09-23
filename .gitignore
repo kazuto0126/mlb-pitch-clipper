@@ -1,0 +1,12 @@
+﻿output/
+.pytest-tmp/
+.pytest_tmp/
+__pycache__/
+.cache/
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mkv
+
+
