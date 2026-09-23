@@ -30,17 +30,30 @@ def test_dedup():
 
 def test_source_type_classification():
     from src.clipper.discovery.classify import classify_source_type as c
-    assert c("Shohei Ohtani Full Outing vs Dbacks") == "full_outing"
-    assert c("Every Pitch: Yamamoto vs Yankees") == "every_pitch"
-    assert c("Crochet Full Start, 11 Ks") == "full_start"
-    assert c("Skenes Full Game Shutout") == "full_game"
-    assert c("Ohtani pitching highlights: 10 Ks on the mound") == "pitching_highlights"
-    assert c("Top 10 insane moments compilation") == "general_highlights"
-    assert c("Ohtani interview on pitching return", duration=600) == "interview"
-    assert c("Fans react to Miller's 103mph", duration=300) == "reaction"
-    assert c("Skenes highlights #shorts", duration=40) == "short"
-    assert c("Skenes top plays of June") == "general_highlights"
-    assert c("Skenes SILENCES the crowd", duration=500) == "unknown"
+    t = lambda *a, **k: c(*a, **k)[0]
+    assert t("Shohei Ohtani Full Outing vs Dbacks") == "full_outing"
+    assert t("Every Pitch: Yamamoto vs Yankees") == "every_pitch"
+    assert t("Crochet Full Start, 11 Ks") == "full_start"
+    assert t("Skenes Full Game Shutout") == "full_game"
+    assert t("Ohtani pitching highlights: 10 Ks on the mound") == "pitching_highlights"
+    assert t("Top 10 insane moments compilation") == "montage"
+    assert t("Ohtani interview on pitching return", duration=600) == "interview"
+    assert t("Fans react to Miller's 103mph", duration=300) == "reaction"
+    assert t("Skenes highlights #shorts", duration=40) == "short"
+    assert t("Skenes top plays of June") == "general_highlights"
+    assert t("Skenes SILENCES the crowd", duration=500) == "unknown"
+    # M6.2 §10 required precedence cases (never long-form via full/game)
+    assert t("FULL HIGHLIGHTS: Red Sox Shutout") == "pitching_highlights"
+    assert t("FULL GAME HIGHLIGHTS vs Yankees") == "general_highlights"
+    assert t("FULL START HIGHLIGHTS June") == "pitching_highlights"
+    assert t("GAME RECAP: Crochet dominates") == "recap"
+    assert t("CINEMATIC RECAP episode 4") == "recap"
+    assert t("COMPLETE GAME shutout") == "full_game"
+    assert t("FULL GAME: Skubal Maddux", duration=6300) == "full_game"
+    assert t("Best moments from a legendary season") == "general_highlights"
+    # reason is human-readable
+    _, why = c("FULL HIGHLIGHTS: X")
+    assert isinstance(why, str) and len(why) > 0
 
 
 def test_scoring_determinism_and_preference():
@@ -51,8 +64,10 @@ def test_scoring_determinism_and_preference():
     short = score_candidate("short", "X #shorts", "Fan", duration=40)
     assert full["final_score"] > high["final_score"] > short["final_score"]
     assert score_candidate("full_outing", "t", "MLB", duration=1500) == full
-    assert set(full) == {"semantic_score", "duration_score", "source_score",
-                         "hold_score", "editing_risk", "final_score"}
+    assert set(full) == {"semantic_score", "duration_sanity_factor",
+                         "duration_sanity_reason", "duration_score",
+                         "source_score", "hold_score", "editing_risk",
+                         "risk_terms", "final_score"}
 
 
 def test_shorts_interview_penalty():
@@ -91,3 +106,43 @@ def test_output_schema():
         assert k in r, k
     assert r["game_year"] == 2026 and r["game_year_confidence"] == "high"
     assert r["source_type"] == "full_outing"
+    assert "classification_reason" in r
+    assert "duration_sanity_factor" in r["suitability"]
+    assert "risk_terms" in r["suitability"]
+
+
+def test_duration_sanity():
+    from src.clipper.discovery.scoring import score_candidate
+    fake_full = score_candidate("full_game", "FULL GAME: X", "MLB", duration=240)
+    assert fake_full["duration_sanity_factor"] == 0.4
+    assert "4min" in fake_full["duration_sanity_reason"]
+    real_full = score_candidate("full_game", "FULL GAME: X", "MLB", duration=6300)
+    assert real_full["duration_sanity_factor"] == 1.0
+    # every_pitch stays valid when short (condensed format)
+    short_ep = score_candidate("every_pitch", "Every Pitch X", "Fan", duration=300)
+    assert short_ep["duration_sanity_factor"] == 1.0
+    assert short_ep["final_score"] > fake_full["final_score"]
+
+
+def test_full_outing_preserved_and_official_highlight_penalized():
+    from src.clipper.discovery.scoring import score_candidate
+    fo = score_candidate("full_outing", "X Full Outing", "MLB", duration=2200)
+    assert fo["duration_sanity_factor"] == 1.0
+    assert fo["final_score"] > 0.7
+    # official channel does NOT cancel highlights editing risk
+    off = score_candidate("general_highlights", "FULL HIGHLIGHTS: X", "MLB",
+                          duration=500)
+    assert off["editing_risk"] >= 0.3
+    assert off["risk_terms"] == ["highlights"]  # one word, one vote
+    assert off["final_score"] < fo["final_score"]
+
+
+def test_no_pitcher_specific_behavior():
+    from src.clipper.discovery.queries import build_queries
+    from src.clipper.discovery import classify as C
+    import inspect
+    src = inspect.getsource(C)
+    assert "Ohtani" not in src and "Crochet" not in src and "WEEI" not in src
+    for name in ["Shohei Ohtani", "Garrett Crochet", "Mason Miller"]:
+        qs = build_queries(name)
+        assert len(qs) == 7 and all(name in q["query"] for q in qs)

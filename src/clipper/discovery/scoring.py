@@ -13,7 +13,8 @@ WEIGHTS = {"semantic": 0.35, "duration": 0.20, "source": 0.20,
 
 SEMANTIC = {"full_outing": 1.0, "every_pitch": 1.0, "full_start": 0.9,
             "full_game": 0.85, "pitching_highlights": 0.5,
-            "general_highlights": 0.3, "unknown": 0.4,
+            "general_highlights": 0.3, "recap": 0.15, "montage": 0.1,
+            "unknown": 0.4,
             "short": 0.05, "interview": 0.05, "reaction": 0.1}
 
 OFFICIAL_CHANNELS = ["mlb", "espn", "fox sports", "tbs", "apple tv",
@@ -31,7 +32,8 @@ RISK_KEYWORDS = ["montage", "mix", "#shorts", "shorts", "interview",
                  "breakdown", "analysis", "explained", "film room",
                  "mic'd up", "top 10", "funniest", "crying", "laughing",
                  "emotional", "tribute", "insane", "filthy", "nastiest",
-                 "cinematic", "rewind"]
+                 "cinematic", "rewind", "highlights", "highlight",
+                 "best moments", "top plays", "condensed"]
 
 
 def semantic_score(source_type: str) -> float:
@@ -72,17 +74,41 @@ def hold_score(source_type: str, duration: float | None) -> float:
     """
     base = {"full_outing": 0.9, "every_pitch": 0.9, "full_start": 0.85,
             "full_game": 0.8, "pitching_highlights": 0.45,
-            "general_highlights": 0.3, "unknown": 0.4,
+            "general_highlights": 0.3, "recap": 0.15, "montage": 0.1,
+            "unknown": 0.4,
             "short": 0.05, "interview": 0.05, "reaction": 0.1}[source_type]
     if duration and duration > 20 * 60:
         base = min(1.0, base + 0.1)
     return base
 
 
+def duration_sanity(source_type: str,
+                    duration: float | None) -> tuple[float, str]:
+    """Long-form claims need commensurate length (source_type semantics
+    only, never per-pitcher). every_pitch is condensed by design: short OK.
+    Returns (factor, reason); factor multiplies the semantic component."""
+    if duration is None:
+        return 1.0, "no duration metadata"
+    mins = duration / 60
+    if source_type == "full_game" and duration < 1800:
+        return 0.4, f"claims full_game at {mins:.0f}min (<30min): likely recap/highlights"
+    if source_type in ("full_outing", "full_start") and duration < 480:
+        return 0.5, f"claims {source_type} at {mins:.0f}min (<8min): too short for multiple PAs"
+    return 1.0, "duration consistent with type"
+
+
+def risk_terms(title: str, description: str = "") -> list[str]:
+    text = f"{title}\n{description}".lower()
+    hits = [k for k in RISK_KEYWORDS if k in text]
+    # one word, one vote: drop terms fully contained in another hit
+    # ("highlight" inside "highlights" must not double-penalize).
+    return [k for k in hits
+            if not any(k != o and k in o for o in hits)]
+
+
 def editing_risk(title: str, description: str = "",
                  duration: float | None = None) -> float:
-    text = f"{title}\n{description}".lower()
-    hits = sum(1 for k in RISK_KEYWORDS if k in text)
+    hits = len(risk_terms(title, description))
     risk = min(1.0, hits / 3.0)
     if duration is not None and duration <= 65:
         risk = max(risk, 0.9)
@@ -96,14 +122,18 @@ def score_candidate(source_type: str, title: str, channel: str,
                     duration: float | None = None,
                     weights: dict | None = None) -> dict:
     w = weights or WEIGHTS
+    sanity, sanity_reason = duration_sanity(source_type, duration)
     comp = {
         "semantic_score": round(semantic_score(source_type), 3),
+        "duration_sanity_factor": sanity,
+        "duration_sanity_reason": sanity_reason,
         "duration_score": round(duration_score(duration), 3),
         "source_score": round(source_score(channel), 3),
         "hold_score": round(hold_score(source_type, duration), 3),
         "editing_risk": editing_risk(title, description, duration),
+        "risk_terms": risk_terms(title, description),
     }
-    final = (w["semantic"] * comp["semantic_score"]
+    final = (w["semantic"] * comp["semantic_score"] * sanity
              + w["duration"] * comp["duration_score"]
              + w["source"] * comp["source_score"]
              + w["hold"] * comp["hold_score"]
@@ -120,6 +150,8 @@ def selection_reason(source_type: str, comp: dict, channel: str) -> str:
         bits.append("pitching-focused highlights (fallback tier)")
     elif source_type in ("general_highlights",):
         bits.append("general highlights (fallback tier)")
+    elif source_type in ("recap", "montage"):
+        bits.append(f"heavily edited {source_type} (penalized tier)")
     elif source_type in ("short", "interview", "reaction"):
         bits.append(f"penalized: {source_type}")
     else:

@@ -20,8 +20,8 @@ def enrich(raw: dict) -> dict:
     """normalize → classify → score → year → selection contract record."""
     from .fetch import normalize
     c = normalize(raw)
-    stype = classify_source_type(c["title"], c["description_excerpt"],
-                                 c["duration"], c["url"])
+    stype, class_reason = classify_source_type(
+        c["title"], c["description_excerpt"], c["duration"], c["url"])
     comp = score_candidate(stype, c["title"], c["channel"],
                            c["description_excerpt"], c["duration"])
     year, conf = extract_year(c["title"], c["description_excerpt"],
@@ -29,6 +29,7 @@ def enrich(raw: dict) -> dict:
     return {
         **c,
         "source_type": stype,
+        "classification_reason": class_reason,
         "game_year": year,
         "game_year_confidence": conf,
         "suitability": comp,

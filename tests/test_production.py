@@ -16,6 +16,9 @@ def _mp4(path, secs=2.0, fps=10, color=(0, 255, 0), size=(160, 120),
             fr[:, size[0] // 2:] = 0
         elif pattern == "inv":
             fr[:, :size[0] // 2] = 0
+        elif pattern == "checker":
+            yy, xx = np.mgrid[0:size[1], 0:size[0]]
+            fr[(yy // 15 + xx // 15) % 2 == 0] = 0
         w.write(fr)
     w.release()
     return path
@@ -67,7 +70,7 @@ def test_conservative_dedup_exact_duplicate(tmp_path):
 def test_duplicate_uncertainty_keep(tmp_path):
     from src.clipper.production.dedup import dedup_clips
     a = _mp4(str(tmp_path / "a.mp4"), secs=2.0, color=(0, 255, 0), pattern="half")
-    b = _mp4(str(tmp_path / "b.mp4"), secs=2.0, color=(0, 255, 0), pattern="inv")
+    b = _mp4(str(tmp_path / "b.mp4"), secs=2.0, color=(0, 255, 0), pattern="checker")
     clips = [{"clip_id": "p001", "path": a, "clip_start": 0.0,
               "clip_end": 2.0, "duration": 2.0},
              {"clip_id": "p002", "path": b, "clip_start": 10.0,
@@ -133,3 +136,52 @@ def test_full_download_cmd_has_no_print_flag():
     from pathlib import Path
     cmd = _build_cmd("http://x", Path("o.mp4"))
     assert "--print" not in cmd and "-o" in cmd
+
+
+def _pair(tmp_path, gap_sec, same=True):
+    from src.clipper.production.dedup import dedup_clips
+    a = _mp4(str(tmp_path / "a.mp4"), secs=2.0, color=(0, 255, 0))
+    b = _mp4(str(tmp_path / ("b.mp4" if same else "c.mp4")), secs=2.0,
+             color=(0, 255, 0), pattern=None if same else "checker")
+    clips = [{"clip_id": "p001", "path": a, "clip_start": 100.0,
+              "clip_end": 102.0, "duration": 2.0},
+             {"clip_id": "p002", "path": b,
+              "clip_start": 102.0 + gap_sec, "clip_end": 104.0 + gap_sec,
+              "duration": 2.0}]
+    return dedup_clips(clips)
+
+
+def test_high_similarity_short_gap_duplicate_allowed(tmp_path):
+    out = _pair(tmp_path, 14.0, same=True)
+    assert len(out["kept"]) == 1 and len(out["removed"]) == 1
+
+
+def test_high_similarity_long_gap_keep_both(tmp_path):
+    out = _pair(tmp_path, 355.0, same=True)
+    assert len(out["kept"]) == 2 and not out["removed"]
+    assert out["flagged"] and out["flagged"][0]["duplicate_status"] == \
+        "visually_similar_but_temporally_distant"
+
+
+def test_low_similarity_short_gap_keep_both(tmp_path):
+    out = _pair(tmp_path, 5.0, same=False)
+    assert len(out["kept"]) == 2 and not out["removed"]
+
+
+def test_timestamp_missing_keep(tmp_path):
+    from src.clipper.production.dedup import dedup_clips
+    a = _mp4(str(tmp_path / "a.mp4"), secs=2.0, color=(0, 255, 0))
+    b = _mp4(str(tmp_path / "b.mp4"), secs=2.0, color=(0, 255, 0))
+    clips = [{"clip_id": "p001", "path": a, "duration": 2.0},
+             {"clip_id": "p002", "path": b, "duration": 2.0}]
+    out = dedup_clips(clips)
+    assert len(out["kept"]) == 2 and not out["removed"]
+
+
+def test_dedup_deterministic_and_chronological(tmp_path):
+    out1 = _pair(tmp_path, 14.0, same=True)
+    out2 = _pair(tmp_path, 14.0, same=True)
+    assert [c["clip_id"] for c in out1["kept"]] == \
+           [c["clip_id"] for c in out2["kept"]]
+    assert out1["removed"][0]["duplicate_of"] == \
+        out2["removed"][0]["duplicate_of"]
