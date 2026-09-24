@@ -92,3 +92,12 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - dedup只刪高信心（dHash≤8＋時長±25%或時間重疊，留長者）；replay無獨立
   detector→`replay_status=uncertain`，不亂刪。
 - 任一source失敗→下一位；全滅→`no_suitable_source` manifest，不crash。
+
+## M6.3 (M1 Shot Purity Hardening)
+- 生產接受條件：`CF + conf ≥ 0.5 + 非 transition_contaminated`。
+  門檻證據：5 runs 14個frame-verified bad CF全≤0.458；已確認good全≥0.61。
+- dissolve guard：shot內5點HSV-hist，`min_adj<0.8 OR edge<0.8`即veto。
+  擋s005/s030等混剪mega-shot；7個verified goods全過（≥0.936）。
+- 已知殘留：homogeneous close-up FP（如16秒純特寫s024 0.557）兩關皆過，
+  需classifier層改進（見`validation/regression_cases/m1_shot_purity/`）。
+- M2/M3/M4/dedup/acquisition 全未動。

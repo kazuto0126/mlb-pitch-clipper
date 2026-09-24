@@ -1,0 +1,194 @@
+[
+ {
+  "shot_id": "s005",
+  "run": "oht",
+  "predicted": "center_field_good",
+  "confidence": 0.6479,
+  "human_class": "bad-impure",
+  "note": "CF+batter, missed cut"
+ },
+ {
+  "shot_id": "s030",
+  "run": "oht",
+  "predicted": "center_field_good",
+  "confidence": 0.623,
+  "human_class": "bad-impure",
+  "note": "28s mega-shot, mixed"
+ },
+ {
+  "shot_id": "s079",
+  "run": "oht",
+  "predicted": "center_field_good",
+  "confidence": 0.3664,
+  "human_class": "bad-view",
+  "note": "pure batter close-up"
+ },
+ {
+  "shot_id": "s186",
+  "run": "oht",
+  "predicted": "center_field_good",
+  "confidence": 0.3087,
+  "human_class": "bad-view",
+  "note": "base runner"
+ },
+ {
+  "shot_id": "s241",
+  "run": "oht",
+  "predicted": "center_field_good",
+  "confidence": 0.3431,
+  "human_class": "bad-view",
+  "note": "dirt-play close-up"
+ },
+ {
+  "shot_id": "s024",
+  "run": "cro",
+  "predicted": "center_field_good",
+  "confidence": 0.5566,
+  "human_class": "bad-view",
+  "note": "16s pure close-up+graphic"
+ },
+ {
+  "shot_id": "s224",
+  "run": "cro",
+  "predicted": "center_field_good",
+  "confidence": 0.3001,
+  "human_class": "bad-view",
+  "note": "logo animation"
+ },
+ {
+  "shot_id": "s011",
+  "run": "cro",
+  "predicted": "center_field_good",
+  "confidence": 0.3123,
+  "human_class": "bad-view",
+  "note": "logo animation"
+ },
+ {
+  "shot_id": "s087",
+  "run": "cro",
+  "predicted": "center_field_good",
+  "confidence": 0.817,
+  "human_class": "good-impure?",
+  "note": "homogeneous CF, real pitch tail"
+ },
+ {
+  "shot_id": "s037",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.458,
+  "human_class": "bad-view",
+  "note": "pitcher head close-up"
+ },
+ {
+  "shot_id": "s236",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.421,
+  "human_class": "bad-view",
+  "note": "pitcher face close-up"
+ },
+ {
+  "shot_id": "s258",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.383,
+  "human_class": "bad-view",
+  "note": "pitcher face close-up"
+ },
+ {
+  "shot_id": "s309",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.452,
+  "human_class": "bad-view",
+  "note": "pitcher upper close-up"
+ },
+ {
+  "shot_id": "s322",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.384,
+  "human_class": "bad-view",
+  "note": "batter close-up"
+ },
+ {
+  "shot_id": "s153",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.3126,
+  "human_class": "bad-view",
+  "note": "batter close-up"
+ },
+ {
+  "shot_id": "s013",
+  "run": "yam",
+  "predicted": "center_field_good",
+  "confidence": 0.7463,
+  "human_class": "good",
+  "note": "audited-clean event source"
+ },
+ {
+  "shot_id": "s060",
+  "run": "ske",
+  "predicted": "center_field_good",
+  "confidence": 0.3178,
+  "human_class": "bad-view",
+  "note": "SUBSCRIBE end card"
+ },
+ {
+  "shot_id": "s000",
+  "run": "ske",
+  "predicted": "center_field_good",
+  "confidence": 0.7385,
+  "human_class": "good",
+  "note": "audited-clean event source"
+ },
+ {
+  "shot_id": "s091",
+  "run": "mil",
+  "predicted": "center_field_good",
+  "confidence": 0.3708,
+  "human_class": "bad-view",
+  "note": "pitcher close-up"
+ },
+ {
+  "shot_id": "s000",
+  "run": "mil",
+  "predicted": "center_field_good",
+  "confidence": 0.7411,
+  "human_class": "good",
+  "note": "audited-clean event source"
+ },
+ {
+  "shot_id": "s001",
+  "run": "dev",
+  "predicted": "center_field_good",
+  "confidence": 0.7367,
+  "human_class": "good",
+  "note": "verified CF pitch"
+ },
+ {
+  "shot_id": "s023",
+  "run": "dev",
+  "predicted": "center_field_good",
+  "confidence": 0.7537,
+  "human_class": "good",
+  "note": "verified CF pitch"
+ },
+ {
+  "shot_id": "s035",
+  "run": "dev",
+  "predicted": "center_field_good",
+  "confidence": 0.8796,
+  "human_class": "good",
+  "note": "verified CF pitch"
+ },
+ {
+  "shot_id": "s037",
+  "run": "dev",
+  "predicted": "center_field_good",
+  "confidence": 0.8847,
+  "human_class": "good",
+  "note": "verified CF pitch"
+ }
+]

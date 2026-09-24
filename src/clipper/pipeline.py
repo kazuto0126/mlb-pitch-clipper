@@ -16,8 +16,9 @@ from pathlib import Path
 
 from .probe import probe_video
 from .sample import sample_frames, shot_sample_times
-from .schemas import build_shot
+from .schemas import PRODUCTION_ACCEPTED, build_shot
 from .segment import segment_shots
+from .shot_purity import MIN_CENTER_FIELD_CONFIDENCE, assess_homogeneity
 from .view_classifier import load_classifier
 
 
@@ -35,6 +36,12 @@ def run_pipeline(video: str, outdir: str, prefer_clip: bool = True) -> dict:
         times = shot_sample_times(s.start, s.end)
         frames = sample_frames(video, times)
         res = clf.classify(frames)
+        # M6.3 purity: confidence gate (cheap) then dissolve guard (CF only).
+        contaminated = False
+        if res.view_class in PRODUCTION_ACCEPTED \
+                and res.confidence >= MIN_CENTER_FIELD_CONFIDENCE:
+            contaminated = assess_homogeneity(
+                video, s.start, s.end)["contaminated"]
         shot = build_shot(
             shot_id=f"s{i:03d}",
             start=s.start,
@@ -43,6 +50,8 @@ def run_pipeline(video: str, outdir: str, prefer_clip: bool = True) -> dict:
             confidence=res.confidence,
             classifier=res.backend,
             scores={k: round(v, 4) for k, v in res.scores.items()},
+            min_confidence=MIN_CENTER_FIELD_CONFIDENCE,
+            transition_contaminated=contaminated,
         )
         records.append(shot.to_dict())
         # thumbnail = middle sampled frame
@@ -72,7 +81,7 @@ def run_pipeline(video: str, outdir: str, prefer_clip: bool = True) -> dict:
         "input": {"path": video, "width": info.width, "height": info.height,
                   "fps": round(info.fps, 3), "duration": round(info.duration, 3), "codec": info.codec},
         "classifier_backend": backend,
-        "production_rule": "accepted_for_pitch_detection = (view_class == center_field_good)",
+        "production_rule": "accepted = CF + conf >= 0.5 + not transition_contaminated",
         "counts": {"total_shots": len(records), "candidates": len(cands), "by_view": by_view},
         "notes": "M1 has no PitchEvent; candidates are shots worth sending to pitch detector (M2).",
     }

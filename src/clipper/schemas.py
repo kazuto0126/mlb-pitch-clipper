@@ -29,6 +29,7 @@ class Shot:
     reject_reason: str | None
     classifier: str = ""
     scores: dict | None = None
+    transition_contaminated: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -42,7 +43,12 @@ def build_shot(
     confidence: float,
     classifier: str = "",
     scores: dict | None = None,
+    min_confidence: float = 0.0,
+    transition_contaminated: bool = False,
 ) -> Shot:
+    """Production acceptance (M6.3): CF + conf >= min_confidence +
+    not transition_contaminated. Defaults preserve the legacy
+    view-only rule for backward compatibility (tests, offline replay)."""
     if view_class not in VIEW_LABELS:
         raise ValueError(f"unknown view_class: {view_class}")
     accepted = view_class in PRODUCTION_ACCEPTED
@@ -56,6 +62,10 @@ def build_shot(
             "graphic_bad": "graphic_transition",
             "other_bad": "other_rejected",
         }[view_class]
+    elif confidence < min_confidence:
+        accepted, reason = False, "low_view_confidence"
+    elif transition_contaminated:
+        accepted, reason = False, "transition_contaminated"
     return Shot(
         shot_id=shot_id,
         start=round(float(start), 3),
@@ -67,4 +77,5 @@ def build_shot(
         reject_reason=reason,
         classifier=classifier,
         scores=scores,
+        transition_contaminated=transition_contaminated,
     )
