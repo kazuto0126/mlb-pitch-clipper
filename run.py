@@ -61,6 +61,34 @@ def main() -> None:
     root = Path(args.out_root) / slug(args.pitcher) / rid
     (root / "sources").mkdir(parents=True, exist_ok=True)
 
+    # 0. pre-flight: fail fast with a clear message, never mid-pipeline.
+    from src.clipper.production.preflight import check as preflight_check
+    problems = preflight_check()
+    if problems:
+        manifest = {"pitcher": args.pitcher, "run_id": rid,
+                    "status": "environment_error",
+                    "reason": "; ".join(problems)}
+        (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
+                                                encoding="utf-8")
+        print(json.dumps(manifest, indent=2))
+        raise SystemExit(2)
+
+    try:
+        return _run_chain(args, rid, root)
+    except Exception as e:  # last-resort guard: manifest, not a bare trace
+        manifest = {"pitcher": args.pitcher, "run_id": rid,
+                    "status": "run_error",
+                    "reason": f"{type(e).__name__}: {str(e)[:300]}"}
+        try:
+            (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
+                                                    encoding="utf-8")
+        except Exception:
+            pass
+        print(json.dumps(manifest, indent=2))
+        raise SystemExit(1)
+
+
+def _run_chain(args, rid: str, root: Path):
     # 1. discovery (frozen M3)
     disc = run_discovery(args.pitcher, out_root=str(Path(args.out_root) / "discovery"),
                          top_n=args.top_n, run_id=rid)
@@ -76,7 +104,10 @@ def main() -> None:
         s.get("channel", "")) != "non_mlb"]
     if not eligible:
         manifest = {"pitcher": args.pitcher, "run_id": rid, "status": "no_suitable_source",
-                    "reason": "all discovery candidates non-MLB context"}
+                    "reason": "all discovery candidates non-MLB context",
+                    "milestone": 7,
+                    "discovery": {"candidate_count": len(selected),
+                                  "selected_count": 0}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
         print(json.dumps(manifest, indent=2))
@@ -94,7 +125,10 @@ def main() -> None:
     if not pool:
         manifest = {"pitcher": args.pitcher, "run_id": rid, "status": "no_suitable_source",
                     "reason": "preview gate admitted no source",
-                    "source_selection_mode": mode}
+                    "milestone": 7,
+                    "source_selection_mode": mode,
+                    "discovery": {"candidate_count": len(selected),
+                                  "selected_count": 0}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
         print(json.dumps(manifest, indent=2))
@@ -114,12 +148,22 @@ def main() -> None:
         if man.get("status") == "ok":
             break
     ok = [m for m in results if m.get("status") == "ok"]
+    dl_failed = [m for m in results
+                 if (m.get("status") or "").startswith("failed-download")]
+    if ok:
+        status = "ok"
+    elif dl_failed and len(dl_failed) == len(results):
+        status = "acquisition_failed"
+    else:
+        status = "no_suitable_source"
     manifest = {
         "pitcher": args.pitcher, "run_id": rid,
         "created_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
-        "milestone": 5, "source_selection_mode": mode,
+        "milestone": 7, "source_selection_mode": mode,
+        "discovery": {"candidate_count": len(selected),
+                      "selected_count": len(pool)},
         "sources_attempted": [m.get("video_id") for m in results],
-        "status": "ok" if ok else "no_suitable_source",
+        "status": status,
         "finals": [m.get("final_path") for m in ok],
         "results": results,
     }

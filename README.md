@@ -1,4 +1,85 @@
-# MLB Pitch Clipper — Milestone 1
+# MLB Pitch Clipper
+
+輸入一位 MLB 投手的英文姓名，自動搜尋 YouTube，剪輯完整 center-field
+投球 sequences，輸出濃縮 MP4 給 downstream analysis 使用。
+
+本專案只回答「哪一段是乾淨、完整、適合分析的投球影片」，
+不做投球 mechanics / pose / biomechanics 分析。
+
+## Requirements
+
+- Python 3.10+
+- FFmpeg (ffmpeg + ffprobe on PATH)
+- yt-dlp
+- Python packages: `pip install -r requirements.txt`
+
+`run.py` 起動前會自動做 pre-flight 檢查，缺東西會直接說明，不會跑到一半才 crash。
+
+## Installation
+
+```bash
+pip install -r requirements.txt
+```
+
+## Basic Usage
+
+```bash
+python run.py "Shohei Ohtani"
+```
+
+正常使用只需要投手英文名。可選 flags：`--top-n 3`、`--max-sources 3`、
+`--year 2026`。不需要手動提供 URL、選片、標 clips 或刪 replay。
+
+## Example
+
+```bash
+python run.py "Yoshinobu Yamamoto"
+# → output/yoshinobu-yamamoto/<run_id>/Yoshinobu_Yamamoto_2025.mp4
+```
+
+## Output
+
+```
+output/<pitcher-slug>/<run_id>/
+  run_manifest.json          # 全輪狀態 + finals + per-source results
+  <Pitcher>_<Year>.mp4       # 產品影片（H.264/yuv420p，時間排序）
+  sources/<video_id>/
+    source/original.mp4      # 下載原檔
+    intermediate/            # normalize 檔
+    shots.json / candidates.json / events.json / rejected_events.json
+    clips/raw/               # 逐顆 clips
+    dedup.json / final.mp4 / manifest.json
+```
+
+檔名：`<英文名>_<年份>.mp4`（同年撞名加 `_01`；年份不可靠用 `UnknownYear`，
+不用上傳年份假裝）。
+
+## Known Limitations（誠實版）
+
+- precision > recall：寧可少收，不收半套。緊剪輯 broadcast 會漏掉一些投球。
+- replay detection 保守（`replay_status=uncertain`），可能保留少量 replay；
+  誤刪比漏刪更糟，故只刪高信心（視覺近似＋60秒內）。
+- homogeneous 且高信心的誤判理論上仍可能漏網（罕見）。
+- impure mega-shot 可能因 precision 政策整段拒絕（含其中的真投球）。
+- YouTube availability 隨時間改變；WBC/NPB/業餘/bullpen 預設不進 production。
+
+## Troubleshooting
+
+- `FFmpeg not found`：安裝 FFmpeg 並加到 PATH（本工具不修改系統）。
+- `yt-dlp not found`：`pip install yt-dlp`。
+- 單支影片失敗會自動 fallback 下一支；全滅時產生 `no_suitable_source` /
+  `acquisition_failed` manifest，不會只剩 stack trace。
+- `quality_warning=true` 仍是成功輸出（clip 太少 / borderline 來源 /
+  低 yield / 年份低信心時提醒）。
+
+## Scope Boundary
+
+只做搜尋→取得→剪輯→整理完整投球影片。生物力學、pose、球種、球速、
+投球評分全部屬於 downstream project。
+
+---
+
+## Milestone 1
 Local Broadcast -> Candidate Center-Field Shots
 
 Production 預設只接受 `center_field_good`。
@@ -110,3 +191,11 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 綠色比例證偽（夜賽）；mound mask先前已證偽。
 - 已知殘留：margin高且紋理夠的誤判（罕見），需classifier層。
 - M2/M3/M4/dedup/acquisition 全未動。
+
+## M7 (Release Candidate)
+- 起動 pre-flight（Python/ffmpeg/ffprobe/yt-dlp/套件），缺件直接說明並退出。
+- 失敗契約：單源失敗→fallback；全滅→`no_suitable_source`/`acquisition_failed`；
+  頂層守衛保證只剩 manifest，不剩裸 stack trace。
+- manifest schema 凍結（含 M1 三種 reject 計數、acquisition 方法、warnings[]、
+  quality_warning 規則）。
+- 已知限制見上（Known Limitations）；replay 維持保守 `uncertain`。
