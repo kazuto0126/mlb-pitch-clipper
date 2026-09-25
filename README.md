@@ -101,3 +101,12 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 已知殘留：homogeneous close-up FP（如16秒純特寫s024 0.557）兩關皆過，
   需classifier層改進（見`validation/regression_cases/m1_shot_purity/`）。
 - M2/M3/M4/dedup/acquisition 全未動。
+
+## M6.4 (Homogeneous Close-up FP Rejection)
+- 新增veto：`margin (CF−max非CF) < 0.40 AND 單幀edge密度 < 0.10`
+  → `homogeneous_closeup`。只用已有多類scores＋場景紋理，無身體特徵。
+- 證據：4 verified close-up FP（margins≤0.277/edges≤0.081）全擋；
+  10 verified真CF保留（含margin僅0.22的s118，靠edge通過——故須AND）。
+- 綠色比例證偽（夜賽）；mound mask先前已證偽。
+- 已知殘留：margin高且紋理夠的誤判（罕見），需classifier層。
+- M2/M3/M4/dedup/acquisition 全未動。

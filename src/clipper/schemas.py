@@ -30,6 +30,7 @@ class Shot:
     classifier: str = ""
     scores: dict | None = None
     transition_contaminated: bool = False
+    homogeneous_closeup: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -45,10 +46,11 @@ def build_shot(
     scores: dict | None = None,
     min_confidence: float = 0.0,
     transition_contaminated: bool = False,
+    homogeneous_closeup: bool = False,
 ) -> Shot:
-    """Production acceptance (M6.3): CF + conf >= min_confidence +
-    not transition_contaminated. Defaults preserve the legacy
-    view-only rule for backward compatibility (tests, offline replay)."""
+    """Production acceptance (M6.3/M6.4): CF + conf >= min_confidence +
+    not transition_contaminated + not homogeneous_closeup. Defaults preserve
+    the legacy view-only rule for backward compatibility (tests, replay)."""
     if view_class not in VIEW_LABELS:
         raise ValueError(f"unknown view_class: {view_class}")
     accepted = view_class in PRODUCTION_ACCEPTED
@@ -66,6 +68,8 @@ def build_shot(
         accepted, reason = False, "low_view_confidence"
     elif transition_contaminated:
         accepted, reason = False, "transition_contaminated"
+    elif homogeneous_closeup:
+        accepted, reason = False, "homogeneous_closeup"
     return Shot(
         shot_id=shot_id,
         start=round(float(start), 3),
@@ -78,4 +82,5 @@ def build_shot(
         classifier=classifier,
         scores=scores,
         transition_contaminated=transition_contaminated,
+        homogeneous_closeup=homogeneous_closeup,
     )

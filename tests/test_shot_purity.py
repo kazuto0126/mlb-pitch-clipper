@@ -36,3 +36,73 @@ def test_homogeneity_deterministic(tmp_path):
     from src.clipper.shot_purity import assess_homogeneity
     v = _mp4(str(tmp_path / "v.mp4"), [(2.0, (0, 255, 0)), (2.0, (0, 200, 0))])
     assert assess_homogeneity(v, 0.0, 4.0) == assess_homogeneity(v, 0.0, 4.0)
+
+
+def _scores(cf, runner=0.0):
+    return {"center_field_good": cf, "side_fullbody_acceptable": runner,
+            "closeup_bad": 0.05, "batter_bad": 0.03, "field_bad": 0.02,
+            "graphic_bad": 0.01, "other_bad": 0.01}
+
+
+def test_class_margin_deterministic():
+    from src.clipper.shot_purity import class_margin
+    s = _scores(0.557, 0.28)
+    assert class_margin(s) == class_margin(s) == round(0.557 - 0.28, 4)
+
+
+def test_homogeneous_closeup_rejected():
+    from src.clipper.schemas import build_shot
+    # s024 profile: CF 0.557, margin 0.277, edge 0.061
+    r = build_shot("s", 0, 16, "center_field_good", 0.557,
+                   min_confidence=0.5, homogeneous_closeup=True)
+    assert r.accepted_for_pitch_detection is False
+    assert r.reject_reason == "homogeneous_closeup"
+    assert r.homogeneous_closeup is True
+
+
+def test_true_cf_retained_despite_low_margin():
+    from src.clipper.schemas import build_shot
+    # s118 profile: TRUE CF, margin 0.22 but broadcast texture kept it
+    r = build_shot("s", 0, 5, "center_field_good", 0.593,
+                   min_confidence=0.5, homogeneous_closeup=False)
+    assert r.accepted_for_pitch_detection is True
+
+
+def test_high_confidence_true_cf_retained():
+    from src.clipper.schemas import build_shot
+    r = build_shot("s", 0, 8, "center_field_good", 0.88,
+                   min_confidence=0.5, homogeneous_closeup=False)
+    assert r.accepted_for_pitch_detection is True
+    assert r.reject_reason is None
+
+
+def test_transition_and_confidence_behavior_unchanged():
+    from src.clipper.schemas import build_shot
+    r = build_shot("s", 0, 5, "center_field_good", 0.37, min_confidence=0.5)
+    assert r.reject_reason == "low_view_confidence"
+    r = build_shot("s", 0, 5, "center_field_good", 0.65,
+                   min_confidence=0.5, transition_contaminated=True)
+    assert r.reject_reason == "transition_contaminated"
+
+
+def test_no_pitcher_specific_logic_in_veto():
+    import inspect
+    from src.clipper import shot_purity as sp
+    src = inspect.getsource(sp)
+    for banned in ["Ohtani", "Crochet", "Miller", "Skenes", "Yamamoto",
+                   "Dodgers", "WEEI", "ESPN", "face_recognition",
+                   "jersey_number", "keypoint", "skeleton", "pose_",
+                   "landmark"]:
+        assert banned not in src
+
+
+def test_assess_closeup_veto_logic(tmp_path):
+    from src.clipper.shot_purity import assess_closeup
+    v = _mp4(str(tmp_path / "v.mp4"), [(4.0, (0, 255, 0))])
+    # decisive margin: never vetoed regardless of texture
+    r = assess_closeup(v, 0.0, 4.0, _scores(0.9, 0.05))
+    assert r["vetoed"] is False and r["reason"] == "decisive CF margin"
+    # uniform dark frames: low edge + low margin -> veto
+    v2 = _mp4(str(tmp_path / "w.mp4"), [(4.0, (30, 30, 30))])
+    r = assess_closeup(v2, 0.0, 4.0, _scores(0.4, 0.35))
+    assert r["vetoed"] is True
