@@ -19,7 +19,8 @@ SEGMENT_SEC = 20.0
 
 
 def plan_segments(duration: float | None,
-                  n: int = 5, seg_len: float = SEGMENT_SEC) -> list[PreviewSegmentPlan]:
+                  n: int = 5, seg_len: float = SEGMENT_SEC,
+                  fractions: tuple = FRACTIONS) -> list[PreviewSegmentPlan]:
     if duration is None or duration <= 0:
         # unknown duration: take from 60s onward, spaced 5 min apart
         return [PreviewSegmentPlan(i, 60.0 + i * 300.0, seg_len)
@@ -28,11 +29,32 @@ def plan_segments(duration: float | None,
         return [PreviewSegmentPlan(0, max(0.0, duration / 2 - seg_len / 2),
                                    min(seg_len, duration))]
     count = 3 if duration < 150 else n
-    fracs = [FRACTIONS[i * len(FRACTIONS) // count] for i in range(count)]
+    fracs = [fractions[i * len(fractions) // count] for i in range(count)]
     plans = []
     for i, f in enumerate(fracs):
         center = duration * f
         start = max(0.0, min(center - seg_len / 2, duration - seg_len))
+        plans.append(PreviewSegmentPlan(i, round(start, 1), seg_len))
+    return plans
+
+
+def plan_expansion(duration: float | None,
+                   existing: list[tuple[float, float]],
+                   fractions: tuple,
+                   seg_len: float = SEGMENT_SEC) -> list[PreviewSegmentPlan]:
+    """Deterministic extra segments at new fractions, skipping anything
+    overlapping already-downloaded ranges (1s tolerance)."""
+    if duration is None or duration <= 0:
+        base = max((e for _, e in existing), default=60.0)
+        return [PreviewSegmentPlan(i, base + 60.0 + i * 300.0, seg_len)
+                for i in range(len(fractions))]
+    plans = []
+    for i, f in enumerate(fractions):
+        center = duration * f
+        start = max(0.0, min(center - seg_len / 2, duration - seg_len))
+        end = start + seg_len
+        if any(s < end + 1.0 and start < e + 1.0 for s, e in existing):
+            continue
         plans.append(PreviewSegmentPlan(i, round(start, 1), seg_len))
     return plans
 

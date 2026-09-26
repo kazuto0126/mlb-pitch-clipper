@@ -199,3 +199,10 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - manifest schema 凍結（含 M1 三種 reject 計數、acquisition 方法、warnings[]、
   quality_warning 規則）。
 - 已知限制見上（Known Limitations）；replay 維持保守 `uncertain`。
+
+## M7.1 (Adaptive Preview Evidence Expansion)
+- preview 證據分三態：sufficient_good（≥1 event，直接過）／sufficient_bad
+  （多CF零事件＋大量reject，不擴張）／insufficient（稀疏，擴張後再判）。
+- 首輪維持5×20s；不足時第二輪＋4段（20/40/60/80%），短片（≤15min）可第三輪。
+- 上限：10段／200秒／50%覆蓋；時間戳確定性不重疊；失敗隔離。
+- M1/M2/Gate判斷邏輯全未動——只改變「看多少證據再判」。

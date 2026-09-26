@@ -100,7 +100,10 @@ def test_manifest_schema_keys():
               "preview_duration_sec", "center_field_ratio",
               "complete_events_per_minute", "complete_event_yield",
               "incomplete_rate", "discontinuity_rate", "edge_skipped_shots",
-              "preview_decision", "reasons"]:
+              "initial_preview_segments", "expanded_preview_segments",
+              "total_preview_seconds", "preview_fraction", "evidence_state",
+              "adaptive_preview_triggered", "adaptive_reason",
+              "final_preview_decision", "preview_decision", "reasons"]:
         assert k in d, k
 
 

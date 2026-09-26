@@ -39,6 +39,15 @@ class SourcePreview:
     preview_error: str = ""
     preview_duration_sec: float = 0.0
     preview_segment_count: int = 0
+    segments_skipped_empty: int = 0  # downloaded but zero CF candidates
+    initial_preview_segments: int = 0
+    expanded_preview_segments: int = 0
+    total_preview_seconds: float = 0.0
+    preview_fraction: float | None = None
+    evidence_state: str = "insufficient"  # sufficient_good|sufficient_bad|insufficient
+    adaptive_preview_triggered: bool = False
+    adaptive_reason: str = ""
+    final_preview_decision: str = "reject"  # mirrors preview_decision
     shot_count: int = 0            # interior shots only (edges carry no signal)
     edge_skipped_shots: int = 0    # truncated by section download edges
     center_field_shots: int = 0    # interior CF candidates (yield denominator)
