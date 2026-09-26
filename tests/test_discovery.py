@@ -91,6 +91,12 @@ def test_year_extraction():
     assert y("Back to a perfect mid-July day at Fenway") == (None, "null")
     assert y("June baseball", "recap episode, you'll see every pitch",
              "2026-07-02") == (2026, "low")
+    # trailer boilerplate must not source a HIGH year (Selig 2000 case)
+    boiler = ("9/23/25: great game. Check out http://m.mlb.com/video. "
+              "About MLB.com: Commissioner Selig announced on January 19, "
+              "2000, that the owners voted.")
+    assert y("Edwin Dominant Bottom of the 9th | FULL INNING", boiler,
+             "2025-09-24") == (2025, "low")
 
 
 def test_output_schema():

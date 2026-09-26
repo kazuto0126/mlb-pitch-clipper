@@ -14,25 +14,43 @@ _MONTHS = ("january|february|march|april|may|june|july|august|september|"
            "oct|nov|dec")
 
 
+def _core_text(title: str, description: str = "") -> str:
+    """Title + head of description only. Trailer boilerplate (e.g. MLB's
+    'About MLB.com' block containing 'January 19, 2000') must never source
+    a HIGH-confidence game date. Uploaders put game info first; missing a
+    late real date falls back to low/null, which is the honest direction."""
+    desc = description or ""
+    cut = len(desc)
+    for marker in ("About MLB", "ABOUT MLB", "Subscribe", "SUBSCRIBE",
+                   "Check out http", "CHECK OUT"):
+        i = desc.find(marker)
+        if 0 <= i < cut:
+            cut = i
+    return f"{title}\n{desc[:min(cut, 300)]}"
+
+
 def extract_year(title: str, description: str = "",
                  published_date: str | None = None) -> tuple[int | None, str]:
     text = f"{title}\n{description}"
+    core = _core_text(title, description)
     # explicit date: June 15 2026 / 2026-06-15 / 06/15/2026 / 15 June 2026
     # NOTE: month alternation must be grouped, else trailing constraints
     # apply to the last alternative only (bare month name => false hit).
+    # explicit dates only ever come from core text (title + description
+    # head); trailer boilerplate must not source HIGH-confidence years.
     if re.search(rf"\b(?:{_MONTHS})\b\.?\s+\d{{1,2}}(?:st|nd|rd|th)?,?\s+(19|20)\d{{2}}",
-                 text, re.I):
-        m = re.search(r"((?:19|20)\d{2})", text)
+                 core, re.I):
+        m = re.search(r"((?:19|20)\d{2})", core)
         return int(m.group(1)), "high"
-    if re.search(r"\b(19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b", text):
-        m = re.search(r"\b((?:19|20)\d{2})[-/]\d{1,2}[-/]\d{1,2}\b", text)
+    if re.search(r"\b(19|20)\d{2}[-/]\d{1,2}[-/]\d{1,2}\b", core):
+        m = re.search(r"\b((?:19|20)\d{2})[-/]\d{1,2}[-/]\d{1,2}\b", core)
         return int(m.group(1)), "high"
-    if re.search(r"\b\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b", text):
-        m = re.search(r"\b\d{1,2}[-/]\d{1,2}[-/]((?:19|20)\d{2})\b", text)
+    if re.search(r"\b\d{1,2}[-/]\d{1,2}[-/](19|20)\d{2}\b", core):
+        m = re.search(r"\b\d{1,2}[-/]\d{1,2}[-/]((?:19|20)\d{2})\b", core)
         return int(m.group(1)), "high"
     # explicit year mention near game words (season wording stays medium)
     m = re.search(r"\b((?:19|20)\d{2})\s+(highlights|outing|start|game)\b",
-                  text, re.I)
+                  core, re.I)
     if m:
         # bare "2026 highlights" is weaker than a date but still explicit
         return int(m.group(1)), "high"
