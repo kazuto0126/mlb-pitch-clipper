@@ -29,6 +29,7 @@ H.264 / yuv420p, original speed, chronological, no cards/overlays.
 - YouTube availability changes over time; relievers/short sources may
   gate-block on sparse preview evidence.
 - Strict shot purity may reject usable events inside impure containers.
+- An occasional wrong-view segment may still slip through (no perfect detection claimed).
 - WBC/NPB/amateur/bullpen footage is excluded from production by default.
 
 ## Scope
