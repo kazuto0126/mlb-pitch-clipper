@@ -129,7 +129,7 @@ python run.py "Shohei Ohtani" --top-n 3
 - `source_type`：full_outing / every_pitch / full_start / full_game / pitching_highlights / general_highlights / short / interview / reaction / unknown（無投手特例）。
 - suitability 可觀察：semantic / duration / source / hold − editing_risk → final（`WEIGHTS` 可配，全投手共用）。
 - game_year：explicit date=high，標題年份=medium，published_date=low，否則 null（不硬猜）。
-- preview：`preview_stats_for_local_file()` 已實作（center-field比例/平均hold/rapid-cut率）；URL分段下載為 M4 stub。
+- preview：`preview_stats_for_local_file()` 已實作（center-field比例/平均hold/rapid-cut率）；URL分段下載於 M4 實作（`acquisition/preview_acquire.py`）。
 
 ## M4 (Preview-Gated Source Acquisition)
 ```bash
@@ -143,7 +143,7 @@ python -m src.clipper.acquisition.run_preview --pitcher-slug shohei-ohtani \
 - 每段跑 **frozen** M1→M2（只重用不改）；section 邊界截斷的首尾 shot 計 `edge_skipped_shots`，不進 metrics。
 - 指標：`complete_event_yield = complete/max(CF,1)`，`per_minute`，`incomplete_rate`，`discontinuity_rate`；decision `recommended/borderline/reject`（全投手同一保守規則，components全輸出）。
 - `competition_context`：WBC/NPB/業餘/bullpen→`non_mlb`（預設不下載、直接reject）；無法確認→`unknown`（至多borderline）。
-- `full_acquire.py` 為 M5 stub。
+- `full_acquire.py`（完整下載）於 M5 實作。
 
 ## M4.5 (M2 Temporal Completion Calibration)
 - 一次性 `validation/calibration_set_v1/`（41窗：11 complete / 30 not；
