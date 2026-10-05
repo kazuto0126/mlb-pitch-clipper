@@ -4,18 +4,22 @@ Sampling: 5 x 20s at 10/30/50/70/90% of duration (skips intro/outro by
 construction). Short videos (<150s): 3 segments. Very short (<60s): 1.
 Original speed, original order, no title cards, no cropping.
 
-Acquisition: yt-dlp --download-sections first; fallback full-then-trim;
-method recorded per segment — never claim success falsely.
+Acquisition: yt-dlp --download-sections first (retried once on transient
+failure, M7.2); fallback full-then-trim; method recorded per segment —
+never claim success falsely.
 """
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 from .schemas import PreviewSegmentPlan
+from .ytdlp import cleanup_partials, js_runtime_args, run_download
 
 FRACTIONS = (0.10, 0.30, 0.50, 0.70, 0.90)
 SEGMENT_SEC = 20.0
+SECTION_ATTEMPTS = 2
 
 
 def plan_segments(duration: float | None,
@@ -65,41 +69,51 @@ def _fmt_ts(sec: float) -> str:
 
 
 def download_section(url: str, start: float, duration: float,
-                     out_path: str) -> PreviewSegmentPlan:
-    """Try section download, else full-then-trim. Returns plan with method."""
+                     out_path: str, runner=subprocess.run,
+                     sleep=time.sleep) -> PreviewSegmentPlan:
+    """Try section download, else full-then-trim. Returns plan with method.
+
+    The cheap section download is retried (transient HTTP 403) before
+    falling back; the full-then-trim fallback downloads the whole source,
+    so it gets a single attempt and its leftovers are removed on failure."""
     plan = PreviewSegmentPlan(0, start, duration)
     end = start + duration
     section = f"*{_fmt_ts(start)}-{_fmt_ts(end)}"
+    out = Path(out_path)
     cmd = ["yt-dlp", url, "-f", "bv*[height<=720]+ba/b[height<=720]/b",
            "--merge-output-format", "mp4", "--download-sections", section,
            "--force-keyframes-at-cuts", "-o", out_path,
-           "--quiet", "--no-warnings", "--ignore-errors"]
-    try:
-        subprocess.check_output(cmd, text=True, timeout=300)
-        if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
-            plan.method = "yt-dlp-section"
-            plan.file = out_path
-            return plan
-    except Exception as e:
-        plan.error = f"section: {str(e)[:150]}"
+           "--quiet", "--no-warnings", "--ignore-errors", *js_runtime_args()]
+    ok, attempts, err = run_download(cmd, out, 300, attempts=SECTION_ATTEMPTS,
+                                     runner=runner, sleep=sleep)
+    if ok:
+        plan.method = "yt-dlp-section"
+        plan.file = out_path
+        return plan
+    plan.error = f"section: {err} (attempts={attempts})"
+    cleanup_partials(out)
     # fallback: full download then ffmpeg trim
-    try:
-        full = out_path.replace(".mp4", ".full.mp4")
-        subprocess.check_output(
-            ["yt-dlp", url, "-f", "bv*[height<=720]+ba/b[height<=720]/b",
-             "--merge-output-format", "mp4", "-o", full,
-             "--quiet", "--no-warnings"], text=True, timeout=1200)
-        subprocess.check_output(
-            ["ffmpeg", "-y", "-v", "error", "-ss", str(start),
-             "-i", full, "-t", str(duration), "-c", "copy", out_path],
-            text=True, timeout=300)
-        Path(full).unlink(missing_ok=True)
-        if Path(out_path).exists() and Path(out_path).stat().st_size > 0:
+    full = Path(out_path.replace(".mp4", ".full.mp4"))
+    ok, _, err = run_download(
+        ["yt-dlp", url, "-f", "bv*[height<=720]+ba/b[height<=720]/b",
+         "--merge-output-format", "mp4", "-o", str(full),
+         "--quiet", "--no-warnings", *js_runtime_args()],
+        full, 1200, attempts=1, runner=runner, sleep=sleep)
+    if ok:
+        try:
+            subprocess.check_output(
+                ["ffmpeg", "-y", "-v", "error", "-ss", str(start),
+                 "-i", str(full), "-t", str(duration), "-c", "copy", out_path],
+                text=True, timeout=300)
+        except Exception as e:
+            err = f"trim: {str(e)[:150]}"
+        full.unlink(missing_ok=True)
+        if out.exists() and out.stat().st_size > 0:
             plan.method = "full-then-trim"
             plan.file = out_path
             return plan
-    except Exception as e:
-        plan.error += f" | full: {str(e)[:150]}"
+    plan.error += f" | full: {err}"
+    cleanup_partials(full)
     plan.method = "failed"
     return plan
 

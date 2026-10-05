@@ -206,3 +206,13 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 首輪維持5×20s；不足時第二輪＋4段（20/40/60/80%），短片（≤15min）可第三輪。
 - 上限：10段／200秒／50%覆蓋；時間戳確定性不重疊；失敗隔離。
 - M1/M2/Gate判斷邏輯全未動——只改變「看多少證據再判」。
+
+## M7.2 (Download Reliability)
+- 證據：RC 回歸 8 投手中 5 次出現 YouTube `HTTP Error 403`；完整下載無重試，
+  Glasnow 較佳來源因一次 403 失去（手動重試即成功）。
+- 完整下載最多 3 次（退避 5s/15s，timeout 不重試）；preview 分段下載重試 1 次
+  後才 fallback full-then-trim（整支下載，僅 1 次）。
+- 錯誤保留 yt-dlp 的 `ERROR` 行（如 403），不再是被截斷的指令字串。
+- 無 deno 但有 node 時加 `--js-runtimes node`（yt-dlp 預設只認 deno）。
+- 最終失敗時清除 `.part` / `.ytdl` 殘檔（共用 `acquisition/ytdlp.py`）。
+- M1/M2/Gate判斷邏輯與 manifest schema 全未動。
