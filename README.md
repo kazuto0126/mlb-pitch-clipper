@@ -260,3 +260,16 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
   但不再從片頭解碼（整場比賽後段每顆 ~6 分 → 2 秒，舊法逼近 600s timeout）。
 - 觀察未處理：preview 有 1 event、完整跑 0 event（2 例）；M1 會把隔網
   fan footage 誤判為 CF（M1 凍結，靠 preview veto 擋）。
+
+## M7.5 (Indecisive Close-up Veto)
+- 證據（`validation/regression_cases/m7_5_low_margin_closeup/`）：交付成品中
+  margin 最低的 3 顆（0.116 / 0.220 / 0.220，runner-up 皆 side）全是投手
+  特寫；margin<0.30 的已接受 CF shot 抽 23 支重下載目視：runner-up 為
+  side/batter/other 者 13/13 非 CF；runner-up 為 field 者 5/10 是夜間轉播的真 CF。
+- 新 veto：margin < 0.30 且 runner-up ≠ `field_bad` → 直接否決（不看紋理）；
+  其餘維持 M6.4（margin<0.40 AND edge<0.10）。只用既有 CLIP 分數，無身體特徵。
+- 勘誤：M6.4 的關鍵 TRUE 案例 oht-s118 經 8 幀重查為本壘側正面、無投球。
+- 回放：成品只少掉那 3 顆錯的；100 次 preview 中 93 不變，改變者仍在
+  M7.3 fallback 層內；M6.4 已驗證的正確鏡頭 margin 皆 ≥0.590 不受影響。
+- 未處理：margin ≥0.39 的打者特寫 / 反向機位，以及 M2 時間性錯誤
+  （起點被切、投後畫面、尾端切鏡）。

@@ -20,3 +20,7 @@ GOOD (must be kept; edges 0.119..0.168, day + night, 5 pitchers/sources):
 
 Vetoed event-shots sampled 6/6: post-play aftermath / close-ups / tails,
 0 full-pitch losses.
+
+> ERRATUM (M7.5): oht-s118 was re-checked with 8 frames and is NOT a
+> center-field pitch (home-side front view, no delivery). See
+> `../m7_5_low_margin_closeup/README.md`. Text above left as frozen.

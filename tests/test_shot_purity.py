@@ -96,6 +96,39 @@ def test_no_pitcher_specific_logic_in_veto():
         assert banned not in src
 
 
+def test_indecisive_closeup_veto_ignores_texture(tmp_path):
+    from src.clipper.shot_purity import assess_closeup
+    # textured frame (high edge density) that the M6.4 AND rule would keep
+    import cv2
+    import numpy as np
+    path = str(tmp_path / "busy.mp4")
+    w = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 120))
+    yy, xx = np.mgrid[0:120, 0:160]
+    busy = np.where(((yy // 4 + xx // 4) % 2 == 0)[..., None], 255, 0).astype(np.uint8)
+    for _ in range(40):
+        w.write(np.repeat(busy, 3, axis=2))
+    w.release()
+
+    def sc(cf, runner_cls, runner):
+        s = {"center_field_good": cf, "side_fullbody_acceptable": 0.01,
+             "closeup_bad": 0.01, "batter_bad": 0.01, "field_bad": 0.01,
+             "graphic_bad": 0.01, "other_bad": 0.01}
+        s[runner_cls] = runner
+        return s
+
+    # s118-like: margin 0.22 vs side view -> vetoed despite busy texture
+    r = assess_closeup(path, 0.0, 4.0, sc(0.593, "side_fullbody_acceptable", 0.373))
+    assert r["vetoed"] is True and r["edge"] is None
+    for cls in ("batter_bad", "other_bad", "closeup_bad"):
+        assert assess_closeup(path, 0.0, 4.0, sc(0.60, cls, 0.40))["vetoed"] is True
+    # dim-broadcast CF: low margin vs field_bad is benign -> texture decides
+    r = assess_closeup(path, 0.0, 4.0, sc(0.55, "field_bad", 0.40))
+    assert r["vetoed"] is False and r["edge"] is not None
+    # margin just above the new cut (s279-like 0.322) -> old rule only
+    r = assess_closeup(path, 0.0, 4.0, sc(0.577, "side_fullbody_acceptable", 0.255))
+    assert r["vetoed"] is False
+
+
 def test_assess_closeup_veto_logic(tmp_path):
     from src.clipper.shot_purity import assess_closeup
     v = _mp4(str(tmp_path / "v.mp4"), [(4.0, (0, 255, 0))])

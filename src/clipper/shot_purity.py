@@ -37,12 +37,31 @@ MARGIN_MIN = 0.40
 EDGE_MIN_DENSITY = 0.10
 NON_CF_CLASSES = ("closeup_bad", "batter_bad", "field_bad", "graphic_bad",
                   "other_bad", "side_fullbody_acceptable")
+# Indecisive close-up veto (M7.5): margin < LOW_MARGIN_MIN against a
+# close-up-like runner-up is vetoed WITHOUT the texture check. Busy crowd
+# backgrounds give close-ups broadcast-level edge density, so the M6.4 AND
+# rule kept them (av5KQk1HNbc s118 was mislabeled a true CF pitch in M6.4;
+# 8-frame re-check: home-side front view, no delivery). Evidence
+# (validation/regression_cases/m7_5_low_margin_closeup/): 23 sampled
+# accepted CF shots with margin < 0.30 — runner-up side/batter/other 13/13
+# not CF (close-ups, dugout, crowd, intro montage); runner-up field_bad
+# 5/10 were true CF in a dim night broadcast, so field_bad stays benign
+# (wide views are the classifier's natural CF neighbour). All 3 final clips
+# with margin < 0.30 were wrong views; no correct final clip is affected.
+LOW_MARGIN_MIN = 0.30
+BENIGN_RUNNER_UP = ("field_bad",)
 
 
 def class_margin(scores: dict | None) -> float:
     sc = scores or {}
     return round(sc.get("center_field_good", 0.0)
                  - max(sc.get(k, 0.0) for k in NON_CF_CLASSES), 4)
+
+
+def runner_up_class(scores: dict | None) -> str | None:
+    sc = scores or {}
+    present = [k for k in NON_CF_CLASSES if k in sc]
+    return max(present, key=lambda k: sc[k]) if present else None
 
 
 def frame_edge_density(frame) -> float:
@@ -56,12 +75,17 @@ def frame_edge_density(frame) -> float:
 
 def assess_closeup(video: str, start: float, end: float,
                    scores: dict | None) -> dict:
-    """Conservative veto: margin AND texture must both fail."""
+    """Close-up veto: an indecisive margin against a close-up-like class
+    (M7.5), else margin AND texture must both fail (M6.4)."""
     from .motion import grab_frame
     margin = class_margin(scores)
     if margin >= MARGIN_MIN:
         return {"vetoed": False, "margin": margin, "edge": None,
                 "reason": "decisive CF margin"}
+    runner = runner_up_class(scores)
+    if margin < LOW_MARGIN_MIN and runner not in BENIGN_RUNNER_UP:
+        return {"vetoed": True, "margin": margin, "edge": None,
+                "reason": f"indecisive close-up (margin vs {runner})"}
     mid = grab_frame(video, (start + end) / 2)
     if mid is None:
         return {"vetoed": False, "margin": margin, "edge": None,
