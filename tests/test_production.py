@@ -130,6 +130,32 @@ def test_exact_clip_extraction(tmp_path):
     assert not bad["ok"]
 
 
+def test_clip_extraction_is_frame_accurate_between_keyframes(tmp_path):
+    # input-side -ss must still land on the exact frame, not the keyframe
+    import subprocess
+    from src.clipper.production.clips import extract_clip
+    raw = str(tmp_path / "raw.mp4")
+    w = cv2.VideoWriter(raw, cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 120))
+    for i in range(60):  # frame i has brightness 4*i
+        w.write(np.full((120, 160, 3), 4 * i, dtype=np.uint8))
+    w.release()
+    src = str(tmp_path / "src.mp4")  # keyframes at 0s and 5s only
+    subprocess.check_call(["ffmpeg", "-y", "-v", "error", "-i", raw, "-c:v", "libx264",
+                           "-g", "50", "-keyint_min", "50", "-sc_threshold", "0",
+                           "-pix_fmt", "yuv420p", src])
+    r = extract_clip(src, 2.3, 3.3, str(tmp_path / "c.mp4"))
+    ok, first = cv2.VideoCapture(str(tmp_path / "c.mp4")).read()
+    assert r["ok"] and ok
+    cap, src_means = cv2.VideoCapture(src), []
+    while True:
+        got, fr = cap.read()
+        if not got:
+            break
+        src_means.append(float(fr.mean()))
+    nearest = min(range(len(src_means)), key=lambda i: abs(src_means[i] - first.mean()))
+    assert nearest == 23  # exact frame at 2.3s, not the keyframe at 0s
+
+
 def test_invalid_media_rejected():
     from src.clipper.production.clips import extract_clip
     r = extract_clip("/nonexistent/x.mp4", 0.0, 2.0, "/tmp/never.mp4")

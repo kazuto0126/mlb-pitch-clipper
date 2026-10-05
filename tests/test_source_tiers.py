@@ -31,23 +31,34 @@ def test_tiers_order_and_vetoes():
         _rep("fail", "reject", "insufficient", status="failed"),
     ]
     pool, mode = pick_sources(selected, reports)
-    assert [s["video_id"] for s in pool] == ["rec", "bord", "ins"]
+    # sufficient_bad is the last-resort tier (M7.4); zero-CF / non-MLB /
+    # failed previews are never tried
+    assert [s["video_id"] for s in pool] == ["rec", "bord", "ins", "bad"]
     assert [s["source_selection_mode"] for s in pool] == [
-        "recommended", "borderline_fallback", "insufficient_evidence_fallback"]
+        "recommended", "borderline_fallback", "insufficient_evidence_fallback",
+        "bad_evidence_fallback"]
     assert mode == "recommended"
 
 
-def test_min_final_clips_only_for_sources_without_preview_events():
+def test_every_tier_requires_few_clips():
     from run import pick_sources
     from src.clipper.production.manifest import FEW_CLIPS
-    selected = [_src(v) for v in ("rec", "bord_ev", "bord_cf", "ins")]
+    selected = [_src(v) for v in ("rec", "bord_ev", "bord_cf", "ins", "bad")]
     reports = [_rep("rec", "recommended", "sufficient_good", events=2),
                _rep("bord_ev", "borderline", "sufficient_good", events=1),
                _rep("bord_cf", "borderline", "sufficient_bad", cf=8, events=0),
-               _rep("ins", "reject", "insufficient", cf=4)]
+               _rep("ins", "reject", "insufficient", cf=4),
+               _rep("bad", "reject", "sufficient_bad", cf=9)]
     pool, _ = pick_sources(selected, reports)
-    assert {s["video_id"]: s["min_final_clips"] for s in pool} == {
-        "rec": 1, "bord_ev": 1, "bord_cf": FEW_CLIPS, "ins": FEW_CLIPS}
+    assert len(pool) == 5
+    assert all(s["min_final_clips"] == FEW_CLIPS for s in pool)
+
+
+def test_bad_evidence_fallback_warning():
+    from src.clipper.production.manifest import build_warnings
+    _, w = build_warnings({"source_selection_mode": "bad_evidence_fallback",
+                           "game_year": 2025, "game_year_confidence": "high"})
+    assert any("preview judged source bad" in s for s in w)
 
 
 def test_insufficient_tier_ordered_by_preview_cf_then_score():
@@ -131,6 +142,54 @@ def test_zero_cf_candidates_is_no_usable_clips_not_crash(tmp_path, monkeypatch):
     man, _ = _produce(tmp_path)
     assert man["status"] == "no-usable-clips" and calls["m2"] == 0
     assert man["center_field_candidates"] == 0 and man["complete_events"] == 0
+
+
+def test_full_game_and_non_mlb_never_produce(monkeypatch):
+    import run
+    monkeypatch.setattr(run, "classify_competition",
+                        lambda t, d, c: "non_mlb" if "WBC" in t else "mlb")
+    assert run.production_exclusion({"title": "x", "source_type": "full_game"}) \
+        .startswith("full_game")
+    assert run.production_exclusion({"title": "WBC final", "source_type": "every_pitch"}) \
+        == "non_mlb"
+    for t in ("every_pitch", "full_start", "full_outing", "pitching_highlights"):
+        assert run.production_exclusion({"title": "x", "source_type": t}) is None
+
+
+def test_run_chain_refills_after_exclusions(tmp_path, monkeypatch):
+    import run
+    selected = [dict(_src("game"), source_type="full_game", title="FULL GAME"),
+                dict(_src("a"), source_type="every_pitch", title="a"),
+                dict(_src("b"), source_type="full_start", title="b"),
+                dict(_src("c"), source_type="every_pitch", title="c"),
+                dict(_src("d"), source_type="every_pitch", title="d")]
+    asked, previewed = {}, {}
+
+    def fake_discovery(name, out_root, top_n, run_id):
+        asked["top_n"] = top_n
+        d = Path(out_root) / "d"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "selected_sources.json").write_text(json.dumps(selected[:top_n]), encoding="utf-8")
+        return {"out_dir": str(d)}
+
+    def fake_preview(slug, sel_path, out_root, max_sources, run_id):
+        previewed["ids"] = [s["video_id"] for s in json.loads(Path(sel_path).read_text(encoding="utf-8"))]
+        d = Path(out_root) / "p"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "source_preview_report.json").write_text("[]", encoding="utf-8")
+        return {"out_dir": str(d)}
+
+    monkeypatch.setattr(run, "run_discovery", fake_discovery)
+    monkeypatch.setattr(run, "run_preview", fake_preview)
+    monkeypatch.setattr(run, "classify_competition", lambda *a: "mlb")
+    root = tmp_path / "out" / "p" / "rid"
+    (root / "sources").mkdir(parents=True)
+    run._run_chain(SimpleNamespace(pitcher="P", top_n=3, max_sources=3, year=None,
+                                   out_root=str(tmp_path / "out")), "rid", root)
+    m = json.loads((root / "run_manifest.json").read_text(encoding="utf-8"))
+    assert asked["top_n"] == 6
+    assert previewed["ids"] == ["a", "b", "c"]  # full game dropped, refilled
+    assert list(m["discovery"]["excluded"]) == ["game"]
 
 
 def test_run_chain_falls_through_tiers_and_enforces_minimum(tmp_path, monkeypatch):

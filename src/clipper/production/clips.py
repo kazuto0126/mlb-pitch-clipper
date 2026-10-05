@@ -1,7 +1,12 @@
 """Exact clip extraction from the normalized source.
 
-- Accurate seek (post-input -ss) + single H.264/yuv420p re-encode so the
-  later concat demuxer can -c copy without another generation.
+- Accurate seek + single H.264/yuv420p re-encode so the later concat
+  demuxer can -c copy without another generation. -ss is an INPUT option:
+  when transcoding, ffmpeg still decodes from the preceding keyframe and
+  discards up to the exact time (accurate_seek), so frames are identical to
+  post-input seeking, but cost no longer grows with clip position
+  (post-input -ss decoded from 0: ~6 min per clip near 3h in a full game,
+  close to the 600s timeout; M7.4 check: 0.00 MSE, 158s -> 2s at 40 min).
 - No title cards, crops, slow-mo, overlays; original speed kept.
 - Every clip is probed (playable, duration > 0, video stream); bad files
   are rejected and never enter final.
@@ -19,8 +24,8 @@ def extract_clip(src: str, start: float, end: float, dest: str) -> dict:
     if dur <= 0.2:
         return {"ok": False, "error": "non-positive duration"}
     Path(dest).parent.mkdir(parents=True, exist_ok=True)
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", src,
-           "-ss", f"{start:.3f}", "-t", f"{dur:.3f}",
+    cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.3f}", "-i", src,
+           "-t", f"{dur:.3f}",
            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
            "-pix_fmt", "yuv420p", "-c:a", "aac",
            "-movflags", "+faststart", dest]

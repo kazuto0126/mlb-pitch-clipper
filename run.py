@@ -35,34 +35,29 @@ def year_filter_ok(s: dict, year: int) -> bool:
 
 
 INSUFFICIENT_FALLBACK = "insufficient_evidence_fallback"
+BAD_EVIDENCE_FALLBACK = "bad_evidence_fallback"
+# Every product must keep >= FEW_CLIPS clips (M7.4): across 25 audited
+# full runs, 1-2 clip outputs were 5/10 correct vs 59/67 for >= 3.
+MIN_FINAL_CLIPS = FEW_CLIPS
 
 
-def _insufficient_fallback_ok(rep: dict) -> bool:
-    """Preview too sparse to judge (not evidence of a bad source): CF seen,
-    MLB/unknown context, acquisition worked. sufficient_bad, zero-CF,
-    non-MLB and failed previews stay vetoed."""
+def _reject_fallback_ok(rep: dict, evidence_state: str) -> bool:
+    """A preview reject with this evidence state may still be tried last:
+    CF seen, MLB/unknown context, acquisition worked. Zero-CF (e.g. fan
+    footage that full M1 misreads as CF), non-MLB and failed previews stay
+    vetoed."""
     return (rep.get("preview_decision") == "reject"
-            and rep.get("evidence_state") == "insufficient"
+            and rep.get("evidence_state") == evidence_state
             and (rep.get("center_field_shots") or 0) > 0
             and rep.get("competition_context", "unknown") in ("mlb", "unknown")
             and rep.get("preview_status") in ("ok", "partial"))
 
 
-def _min_final_clips(mode: str, rep: dict) -> int:
-    """Sources the preview never saw a complete event in (insufficient tier,
-    borderline on CF alone) must prove themselves in the full run: 1-2 clip
-    outputs from them were mostly wrong views (M7.3 audit: 1/4 good)."""
-    if mode == INSUFFICIENT_FALLBACK:
-        return FEW_CLIPS
-    if mode == "borderline_fallback" and not rep.get("m2_complete_events"):
-        return FEW_CLIPS
-    return 1
-
-
 def pick_sources(selected: list[dict], preview_reports: list[dict]) -> tuple[list[dict], str]:
     """Tiered pool: recommended -> borderline MLB/unknown -> insufficient-
-    evidence rejects (M7.3). Each candidate carries min_final_clips (see
-    _min_final_clips). Returns (pool, mode of the first tier present)."""
+    evidence rejects (M7.3) -> sufficient_bad rejects (M7.4). Every
+    candidate carries min_final_clips = MIN_FINAL_CLIPS. Returns (pool,
+    mode of the first tier present)."""
     by_id = {r["video_id"]: r for r in preview_reports}
 
     def rep(s):
@@ -74,16 +69,20 @@ def pick_sources(selected: list[dict], preview_reports: list[dict]) -> tuple[lis
     rec = [s for s in selected if rep(s).get("preview_decision") == "recommended"]
     border = [s for s in selected if rep(s).get("preview_decision") == "borderline"
               and rep(s).get("competition_context", "unknown") in ("mlb", "unknown")]
-    insuff = [s for s in selected if _insufficient_fallback_ok(rep(s))]
-    # order: M2 preview evidence (events), then M3 score; the insufficient
-    # tier has no events by definition, so preview CF evidence comes first.
+    insuff = [s for s in selected if _reject_fallback_ok(rep(s), "insufficient")]
+    bad = [s for s in selected if _reject_fallback_ok(rep(s), "sufficient_bad")]
+
+    def by_events(s):
+        return (rep(s).get("m2_complete_events", 0), score(s))
+
+    def by_cf(s):  # reject tiers have no events by definition
+        return (rep(s).get("center_field_shots", 0), score(s))
+
     tiers = [
-        ("recommended", sorted(rec, key=lambda s: (
-            rep(s).get("m2_complete_events", 0), score(s)), reverse=True)),
-        ("borderline_fallback", sorted(border, key=lambda s: (
-            rep(s).get("m2_complete_events", 0), score(s)), reverse=True)),
-        (INSUFFICIENT_FALLBACK, sorted(insuff, key=lambda s: (
-            rep(s).get("center_field_shots", 0), score(s)), reverse=True)),
+        ("recommended", sorted(rec, key=by_events, reverse=True)),
+        ("borderline_fallback", sorted(border, key=by_events, reverse=True)),
+        (INSUFFICIENT_FALLBACK, sorted(insuff, key=by_cf, reverse=True)),
+        (BAD_EVIDENCE_FALLBACK, sorted(bad, key=by_cf, reverse=True)),
     ]
     pool = []
     for mode, group in tiers:
@@ -91,7 +90,7 @@ def pick_sources(selected: list[dict], preview_reports: list[dict]) -> tuple[lis
             s["preview_decision"] = rep(s).get("preview_decision")
             s["competition_context"] = rep(s).get("competition_context", "unknown")
             s["source_selection_mode"] = mode
-            s["min_final_clips"] = _min_final_clips(mode, rep(s))
+            s["min_final_clips"] = MIN_FINAL_CLIPS
             pool.append(s)
     mode = pool[0]["source_selection_mode"] if pool else "borderline_fallback"
     return pool, mode
@@ -139,25 +138,46 @@ def main() -> None:
         raise SystemExit(1)
 
 
+def production_exclusion(s: dict) -> str | None:
+    """Sources that can never yield a clean single-pitcher video.
+
+    - non_mlb (frozen rule).
+    - full_game (M7.4): a game broadcast/recap shows BOTH teams' pitchers
+      from the same center-field camera, and pitcher identity is out of
+      scope (no identity classifier). WS G7 full game for Blake Snell: 28
+      clips, both teams' pitchers + 5 non-pitch segments.
+    """
+    if classify_competition(s.get("title", ""), s.get("description_excerpt", ""),
+                            s.get("channel", "")) == "non_mlb":
+        return "non_mlb"
+    if s.get("source_type") == "full_game":
+        return "full_game (both teams' pitchers)"
+    return None
+
+
+# Discovery over-fetches so production exclusions do not shrink the set of
+# sources handed to the preview below --top-n (ranked prefix unchanged).
+DISCOVERY_OVERFETCH = 2
+
+
 def _run_chain(args, rid: str, root: Path):
     # 1. discovery (frozen M3)
     disc = run_discovery(args.pitcher, out_root=str(Path(args.out_root) / "discovery"),
-                         top_n=args.top_n, run_id=rid)
+                         top_n=args.top_n * DISCOVERY_OVERFETCH, run_id=rid)
     selected = json.loads(Path(disc["out_dir"], "selected_sources.json")
                           .read_text(encoding="utf-8"))
     if args.year is not None:
         filt = [s for s in selected if year_filter_ok(s, args.year)]
         selected = filt or selected
-    # production competition filter (frozen rule: non_mlb never produces)
-    eligible = [s for s in selected if classify_competition(
-        s.get("title", ""), s.get("description_excerpt", ""),
-        s.get("channel", "")) != "non_mlb"]
+    excluded = {s["video_id"]: why for s in selected
+                if (why := production_exclusion(s))}
+    eligible = [s for s in selected if s["video_id"] not in excluded][:args.top_n]
     if not eligible:
         manifest = {"pitcher": args.pitcher, "run_id": rid, "status": "no_suitable_source",
-                    "reason": "all discovery candidates non-MLB context",
+                    "reason": "no eligible single-pitcher MLB source in discovery",
                     "milestone": 7,
                     "discovery": {"candidate_count": len(selected),
-                                  "selected_count": 0}}
+                                  "selected_count": 0, "excluded": excluded}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
         print(json.dumps(manifest, indent=2))
@@ -178,7 +198,7 @@ def _run_chain(args, rid: str, root: Path):
                     "milestone": 7,
                     "source_selection_mode": mode,
                     "discovery": {"candidate_count": len(selected),
-                                  "selected_count": 0}}
+                                  "selected_count": 0, "excluded": excluded}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
         print(json.dumps(manifest, indent=2))
@@ -191,7 +211,8 @@ def _run_chain(args, rid: str, root: Path):
         try:
             man = produce_source(args.pitcher, cand,
                                  str(root / "sources" / cand["video_id"]), taken,
-                                 min_final_clips=cand.get("min_final_clips", 1))
+                                 min_final_clips=cand.get("min_final_clips",
+                                                          MIN_FINAL_CLIPS))
         except Exception as e:  # never crash the run on one source
             man = {"pitcher_name": args.pitcher, "video_id": cand.get("video_id", ""),
                    "source_selection_mode": cand["source_selection_mode"],
@@ -215,7 +236,7 @@ def _run_chain(args, rid: str, root: Path):
         "created_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "milestone": 7, "source_selection_mode": mode,
         "discovery": {"candidate_count": len(selected),
-                      "selected_count": len(pool)},
+                      "selected_count": len(pool), "excluded": excluded},
         "sources_attempted": [m.get("video_id") for m in results],
         "status": status,
         "finals": [m.get("final_path") for m in ok],

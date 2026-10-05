@@ -235,6 +235,28 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
   `source_selection_mode=insufficient_evidence_fallback` 並加 warning。
   （e2e：Edwin 0-event borderline 來源 2 clips，1 顆疑似缺起始 → 現在不出。）
 - 仍永不 fallback：sufficient_bad、preview 零 CF、non_mlb、取得失敗。
-  （sufficient_bad 有 1/2 誤殺紀錄，樣本太少未改。）
+  （sufficient_bad 有 1/2 誤殺紀錄，樣本太少未改。→ M7.4 已改。）
 - 修正：完整影片零 CF candidate 時不再 AssertionError，改 `no-usable-clips`。
 - M1/M2/Gate 判斷與門檻全未動；只改「哪些來源可當備援、何時算成功」。
+
+## M7.4 (Uniform Yield Minimum + Bad-Evidence Last Resort)
+- 證據（`validation/regression_cases/m7_4_tier_yield/`）：新增 5 投手、
+  所有 preview 過的來源一律完整跑＋目視；25 支完整跑中，≥3 clips 的輸出
+  59/67 正確，1–2 clips 只有 5/10。
+- **每個產品都須 ≥ `FEW_CLIPS`（3）clips**（所有層級，含 recommended）；
+  不足 → `low-yield`、不產檔、試下一位。觀察資料中 recommended / 有 event
+  的 borderline 從未產出 1–2 clips，故它們的既有輸出不變。
+- sufficient_bad 改為最後一層 `bad_evidence_fallback`（4 支完整跑：僅
+  4EQCjkErc5k 達 3 clips 且 3/3 正確，其餘不達標不會出貨）。
+- 零 CF veto 保留：RCC0dhypebY（隔網拍的業餘/小聯盟影片）完整跑被 M1 誤判
+  出 5 clips、0/5 正確 → ≥3 clips 擋不住非轉播畫面，evidence 型 veto 必要。
+- **full_game 一律不進 production**（同 non_mlb）：整場轉播/比賽集錦
+  兩隊投手都出現在同一中外野機位，而投手身分辨識不在範圍內。證據：Snell
+  的 WS G7 整場（212 分）完整跑出 28 clips，兩隊投手混雜＋5 段非投球
+  （片頭、子母畫面、特寫）。M7.3 讓 insufficient 的整場比賽可當 fallback，
+  此規則補上該破口。discovery 改取 2×`--top-n` 再排除，維持 preview 數量
+  （無排除時排名前綴不變）；排除原因記在 run manifest `discovery.excluded`。
+- clip 抽取改 input-side `-ss`：轉碼時仍逐格精準（與舊法 0.00 MSE），
+  但不再從片頭解碼（整場比賽後段每顆 ~6 分 → 2 秒，舊法逼近 600s timeout）。
+- 觀察未處理：preview 有 1 event、完整跑 0 event（2 例）；M1 會把隔網
+  fan footage 誤判為 CF（M1 凍結，靠 preview veto 擋）。

@@ -38,6 +38,9 @@ def build_warnings(m: dict) -> tuple[bool, list[str]]:
     elif m.get("source_selection_mode") == "insufficient_evidence_fallback":
         warnings.append("insufficient preview evidence fallback "
                         "(accepted only on full-run yield)")
+    elif m.get("source_selection_mode") == "bad_evidence_fallback":
+        warnings.append("preview judged source bad; last-resort fallback "
+                        "(accepted only on full-run yield)")
     cf = m.get("center_field_candidates") or 0
     comp = m.get("complete_events") or 0
     if cf and comp / cf < LOW_YIELD:

@@ -11,6 +11,12 @@ project. Downstream MUST depend only on this contract, never on internals
 ```
 
 - H.264 / avc1, yuv420p, original speed, chronological pitching clips.
+- At least 3 clips per produced video (`final_clip_count >= 3`); a source
+  that keeps fewer is not delivered (1–2 clip outputs were mostly wrong
+  views).
+- Sources are pitcher-centered edits (every pitch / full start / full
+  outing / pitching highlights). Full-game broadcasts are never used: they
+  show both teams' pitchers and pitcher identity is not verified.
 - No title cards, no overlays, no biomechanics annotation.
 - `UnknownYear` when the game year cannot be determined reliably
   (published year is never faked as game year): only high/medium
