@@ -13,7 +13,8 @@ project. Downstream MUST depend only on this contract, never on internals
 - H.264 / avc1, yuv420p, original speed, chronological pitching clips.
 - No title cards, no overlays, no biomechanics annotation.
 - `UnknownYear` when the game year cannot be determined reliably
-  (published year is never faked as game year).
+  (published year is never faked as game year): only high/medium
+  `game_year_confidence` years are used; low and null become `UnknownYear`.
 
 ## OPTIONAL METADATA: manifest.json
 
@@ -24,6 +25,9 @@ pitcher_name, source video_id, source title,
 game_year, game_year_confidence,
 final_clip_count, final_duration_sec, final_path
 ```
+
+`game_year` is the raw extracted value and may be set even when the
+filename says `UnknownYear` (low confidence = published-date fallback).
 
 Plus run-level `run_manifest.json` (status, finals, per-source results)
 and `quality_summary` / `quality_warning` / `warnings[]`.

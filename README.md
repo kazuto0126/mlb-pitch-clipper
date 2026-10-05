@@ -51,8 +51,9 @@ output/<pitcher-slug>/<run_id>/
     dedup.json / final.mp4 / manifest.json
 ```
 
-檔名：`<英文名>_<年份>.mp4`（同年撞名加 `_01`；年份不可靠用 `UnknownYear`，
-不用上傳年份假裝）。
+檔名：`<英文名>_<年份>.mp4`（同年撞名加 `_01`；只用 `game_year_confidence`
+為 high/medium 的年份，low（上傳年份 fallback）/null 一律用 `UnknownYear`，
+不用上傳年份假裝）。manifest 仍保留原始 `game_year` / `game_year_confidence`。
 
 ## Known Limitations（誠實版）
 
@@ -169,7 +170,10 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - source選擇：recommended優先，否則best borderline MLB/unknown（reject永不當
   fallback）；`source_selection_mode` 寫入manifest；non_mlb不進production。
 - 每source獨立產出（`sources/<video_id>/final.mp4`＋產品檔名拷貝）；
-  同年撞名加`_01`；year不可靠→`_UnknownYear`（不用published year假裝）。
+  同年撞名加`_01`；year confidence low/null→`_UnknownYear`（不用published year
+  假裝；manifest保留原值並加 `game year unreliable` warning）。
+- `--year`：只有 high/medium 年份不符才排除；low/null 視為未知而保留，
+  但 published year 早於 `--year` 者排除（影片不會早於比賽上傳）。
 - dedup只刪高信心（dHash≤8＋時長±25%或時間重疊，留長者）；replay無獨立
   detector→`replay_status=uncertain`，不亂刪。
 - 任一source失敗→下一位；全滅→`no_suitable_source` manifest，不crash。

@@ -18,7 +18,8 @@ taken = set(json.load(open(taken_path)) if pathlib.Path(taken_path).exists() els
 mg = merge_clips([c["path"] for c in kept], str(sdir / "final.mp4"))
 print("merge:", json.dumps(mg))
 if mg.get("ok"):
-    fname = product_filename(pitcher, int(year) if year != "None" else None, taken)
+    fname = product_filename(pitcher, int(year) if year != "None" else None, taken,
+                             game_year_confidence=man.get("game_year_confidence"))
     taken.add(fname)
     shutil.copy(sdir / "final.mp4", sdir.parent.parent / fname)
     man.update({"status": "ok", "final_path": fname,

@@ -144,7 +144,8 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     mg = merge_clips([c["path"] for c in kept], final_tmp)
     if not mg.get("ok"):
         return _finish(f"failed-merge: {mg.get('error')}")
-    fname = product_filename(pitcher_name, candidate.get("game_year"), filename_taken)
+    fname = product_filename(pitcher_name, man["game_year"], filename_taken,
+                             game_year_confidence=man["game_year_confidence"])
     filename_taken.add(fname)
     shutil.copy(final_tmp, Path(source_dir).parent.parent / fname)
     return _finish("ok", {

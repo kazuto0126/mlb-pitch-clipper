@@ -19,7 +19,10 @@ python run.py "Shohei Ohtani"
 
 H.264 / yuv420p, original speed, chronological, no cards/overlays.
 `UnknownYear` when the game year cannot be determined reliably
-(published year is never faked as game year).
+(published year is never faked as game year): only high/medium
+`game_year_confidence` years are used; low (published-date fallback) and
+null become `UnknownYear`. The manifest keeps the raw `game_year` /
+`game_year_confidence` and adds a `game year unreliable` warning.
 
 ## Known Limitations
 

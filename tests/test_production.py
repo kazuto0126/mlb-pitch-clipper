@@ -5,6 +5,7 @@ sys.path.insert(0, ".")
 
 import cv2
 import numpy as np
+import pytest
 
 
 def _mp4(path, secs=2.0, fps=10, color=(0, 255, 0), size=(160, 120),
@@ -28,15 +29,96 @@ def test_filename_sanitizer():
     from src.clipper.production.naming import sanitize_name, product_filename
     assert sanitize_name("Shohei Ohtani") == "Shohei_Ohtani"
     assert sanitize_name("  Paul   Skenes  ") == "Paul_Skenes"
-    assert product_filename("Shohei Ohtani", 2025) == "Shohei_Ohtani_2025.mp4"
+    assert product_filename("Shohei Ohtani", 2025, game_year_confidence="high") \
+        == "Shohei_Ohtani_2025.mp4"
 
 
 def test_known_and_unknown_year_filename():
     from src.clipper.production.naming import product_filename
-    assert product_filename("Paul Skenes", 2026) == "Paul_Skenes_2026.mp4"
-    assert product_filename("Paul Skenes", None) == "Paul_Skenes_UnknownYear.mp4"
+    assert product_filename("Paul Skenes", 2026, game_year_confidence="high") \
+        == "Paul_Skenes_2026.mp4"
+    assert product_filename("Paul Skenes", None, game_year_confidence="null") \
+        == "Paul_Skenes_UnknownYear.mp4"
     taken = {"Shohei_Ohtani_2025.mp4"}
-    assert product_filename("Shohei Ohtani", 2025, taken) == "Shohei_Ohtani_2025_01.mp4"
+    assert product_filename("Shohei Ohtani", 2025, taken,
+                            game_year_confidence="high") == "Shohei_Ohtani_2025_01.mp4"
+
+
+@pytest.mark.parametrize("year,conf,expected", [
+    (2025, "high", "Paul_Skenes_2025.mp4"),
+    (2025, "medium", "Paul_Skenes_2025.mp4"),
+    (2025, "low", "Paul_Skenes_UnknownYear.mp4"),   # published-date fallback
+    (None, "null", "Paul_Skenes_UnknownYear.mp4"),
+    (2025, None, "Paul_Skenes_UnknownYear.mp4"),    # confidence missing
+])
+def test_filename_year_by_confidence(year, conf, expected):
+    from src.clipper.production.naming import product_filename
+    assert product_filename("Paul Skenes", year,
+                            game_year_confidence=conf) == expected
+
+
+def test_unreliable_year_collision_suffix():
+    from src.clipper.production.naming import product_filename
+    taken = {"Paul_Skenes_UnknownYear.mp4"}
+    assert product_filename("Paul Skenes", 2025, taken, game_year_confidence="low") \
+        == "Paul_Skenes_UnknownYear_01.mp4"
+
+
+def _fake_production_stages(monkeypatch):
+    """Stub every heavy stage of produce_source; naming/manifest stay real."""
+    import json
+    from pathlib import Path
+
+    from src.clipper.production import run_source
+
+    def m1(src, out, prefer_clip=True):
+        Path(out).mkdir(parents=True, exist_ok=True)
+        (Path(out) / "shots.json").write_text(
+            json.dumps([{"accepted_for_pitch_detection": True}]), encoding="utf-8")
+        (Path(out) / "candidates.json").write_text(json.dumps([{}]), encoding="utf-8")
+
+    def m2(out, video=None):
+        (Path(out) / "events.json").write_text(json.dumps(
+            [{"event_id": "e1", "clip_start": 1.0, "clip_end": 3.0}]), encoding="utf-8")
+        (Path(out) / "rejected_events.json").write_text("[]", encoding="utf-8")
+
+    def merge(paths, out):
+        Path(out).write_bytes(b"mp4")
+        return {"ok": True, "duration": 2.0, "codec_info": "h264 yuv420p", "fps": 30.0}
+
+    monkeypatch.setattr(run_source, "normalize_media",
+                        lambda src, dst: {"ok": True, "method": "reuse-original"})
+    monkeypatch.setattr(run_source, "run_m1", m1)
+    monkeypatch.setattr(run_source, "run_m2", m2)
+    monkeypatch.setattr(run_source, "extract_clip",
+                        lambda src, s, e, dest: {"ok": True, "duration": e - s})
+    monkeypatch.setattr(run_source, "dedup_clips",
+                        lambda clips: {"kept": clips, "removed": []})
+    monkeypatch.setattr(run_source, "merge_clips", merge)
+
+
+@pytest.mark.parametrize("year,conf,expected", [
+    (2025, "high", "Test_Pitcher_2025.mp4"),
+    (2025, "medium", "Test_Pitcher_2025.mp4"),
+    (2025, "low", "Test_Pitcher_UnknownYear.mp4"),
+    (None, "null", "Test_Pitcher_UnknownYear.mp4"),
+])
+def test_produce_source_filename_never_fakes_year(tmp_path, monkeypatch,
+                                                   year, conf, expected):
+    from src.clipper.production.run_source import produce_source
+    _fake_production_stages(monkeypatch)
+    run_dir = tmp_path / "run"
+    man = produce_source(
+        "Test Pitcher", {"video_id": "v", "url": "http://x", "title": "t",
+                         "game_year": year, "game_year_confidence": conf},
+        str(run_dir / "sources" / "v"), set(),
+        downloader=lambda url, out, meta=None: {"ok": True, "method": "fake"})
+    assert man["status"] == "ok"
+    assert man["final_path"] == expected and (run_dir / expected).exists()
+    # manifest keeps the raw extracted values for downstream
+    assert man["game_year"] == year and man["game_year_confidence"] == conf
+    flagged = any(w.startswith("game year unreliable") for w in man["warnings"])
+    assert flagged is (conf in ("low", "null"))
 
 
 def test_exact_clip_extraction(tmp_path):
@@ -128,6 +210,25 @@ def test_no_eligible_source_manifest(tmp_path):
         [{"video_id": "v1", "preview_decision": "reject",
           "competition_context": "mlb", "m2_complete_events": 0}])
     assert pool == [] and mode == "borderline_fallback"
+
+
+@pytest.mark.parametrize("cand,keep", [
+    ({"game_year": 2026, "game_year_confidence": "high"}, True),
+    ({"game_year": 2025, "game_year_confidence": "high"}, False),
+    ({"game_year": 2025, "game_year_confidence": "medium"}, False),
+    # low = published year: unknown game year, kept unless published earlier
+    ({"game_year": 2026, "game_year_confidence": "low",
+      "published_date": "2026-05-01"}, True),
+    ({"game_year": 2027, "game_year_confidence": "low",
+      "published_date": "2027-01-10"}, True),
+    ({"game_year": 2024, "game_year_confidence": "low",
+      "published_date": "2024-08-01"}, False),
+    ({"game_year": None, "game_year_confidence": "null",
+      "published_date": None}, True),
+])
+def test_year_filter_treats_low_confidence_as_unknown(cand, keep):
+    from run import year_filter_ok
+    assert year_filter_ok(cand, 2026) is keep
 
 
 def test_full_download_cmd_has_no_print_flag():

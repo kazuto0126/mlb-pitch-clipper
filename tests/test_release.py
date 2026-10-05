@@ -49,7 +49,8 @@ def test_manifest_schema_source_and_run():
 def test_quality_warning_rules():
     from src.clipper.production.manifest import build_warnings
     base = {"center_field_candidates": 100, "complete_events": 10,
-            "final_clip_count": 10, "game_year_confidence": "high",
+            "final_clip_count": 10, "game_year": 2025,
+            "game_year_confidence": "high",
             "replay_status": "duplicates-removed", "status": "ok"}
     w, lst = build_warnings(base)
     assert w is False and lst == []
@@ -60,6 +61,24 @@ def test_quality_warning_rules():
     w, lst = build_warnings({**base, "final_clip_count": 0,
                              "status": "no-usable-clips"})
     assert w is True
+
+
+def test_game_year_warning_matches_filename():
+    from src.clipper.production.manifest import build_warnings
+    base = {"center_field_candidates": 100, "complete_events": 10,
+            "final_clip_count": 10, "replay_status": "duplicates-removed",
+            "status": "ok"}
+    for conf in ("high", "medium"):  # year used in filename -> no warning
+        w, lst = build_warnings({**base, "game_year": 2025,
+                                 "game_year_confidence": conf})
+        assert w is False and lst == []
+    w, lst = build_warnings({**base, "game_year": 2025,
+                             "game_year_confidence": "low"})
+    assert w is True and lst == [
+        "game year unreliable (2025 is low confidence; filename uses UnknownYear)"]
+    w, lst = build_warnings({**base, "game_year": None,
+                             "game_year_confidence": "null"})
+    assert w is True and lst == ["game year unreliable"]
 
 
 def test_all_sources_failed_statuses():

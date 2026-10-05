@@ -5,6 +5,8 @@ only zero usable clips becomes no_usable_clips.
 """
 from __future__ import annotations
 
+from .naming import reliable_game_year
+
 LOW_YIELD = 0.03
 FEW_CLIPS = 3
 
@@ -40,11 +42,13 @@ def build_warnings(m: dict) -> tuple[bool, list[str]]:
     final = m.get("final_clip_count") or 0
     if 0 < final < FEW_CLIPS:
         warnings.append(f"very few final clips ({final})")
-    if m.get("game_year_confidence") in ("low", "null", None) \
-            and m.get("game_year") is None:
-        warnings.append("game year unreliable")
-    elif m.get("game_year_confidence") == "low":
-        warnings.append("game year low confidence")
+    year, conf = m.get("game_year"), m.get("game_year_confidence")
+    if reliable_game_year(year, conf) is None:
+        if year is not None:  # raw year kept in manifest, not in filename
+            warnings.append(f"game year unreliable ({year} is {conf} "
+                            "confidence; filename uses UnknownYear)")
+        else:
+            warnings.append("game year unreliable")
     if m.get("replay_status") == "uncertain":
         warnings.append("replay detection conservative (uncertain)")
     if m.get("status") == "no-usable-clips":

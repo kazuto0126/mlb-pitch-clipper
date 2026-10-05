@@ -18,7 +18,19 @@ from pathlib import Path
 from src.clipper.acquisition.run_preview import run_preview
 from src.clipper.discovery.competition import classify_competition
 from src.clipper.discovery.run_discovery import run_discovery, slug
+from src.clipper.production.naming import reliable_game_year
 from src.clipper.production.run_source import produce_source
+
+
+def year_filter_ok(s: dict, year: int) -> bool:
+    """--year: only a high/medium game year can mismatch. low (published
+    year) / null are unknown and kept, except a video can't show a game
+    played after it was published: published year < year excludes."""
+    gy = reliable_game_year(s.get("game_year"), s.get("game_year_confidence"))
+    if gy is not None:
+        return gy == year
+    pub = (s.get("published_date") or "")[:4]
+    return not (pub.isdigit() and int(pub) < year)
 
 
 def pick_sources(selected: list[dict], preview_reports: list[dict]) -> tuple[list[dict], str]:
@@ -95,8 +107,7 @@ def _run_chain(args, rid: str, root: Path):
     selected = json.loads(Path(disc["out_dir"], "selected_sources.json")
                           .read_text(encoding="utf-8"))
     if args.year is not None:
-        filt = [s for s in selected
-                if s.get("game_year") in (args.year, None)]
+        filt = [s for s in selected if year_filter_ok(s, args.year)]
         selected = filt or selected
     # production competition filter (frozen rule: non_mlb never produces)
     eligible = [s for s in selected if classify_competition(
