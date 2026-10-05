@@ -220,3 +220,21 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 無 deno 但有 node 時加 `--js-runtimes node`（yt-dlp 預設只認 deno）。
 - 最終失敗時清除 `.part` / `.ytdl` 殘檔（共用 `acquisition/ytdlp.py`）。
 - M1/M2/Gate判斷邏輯與 manifest schema 全未動。
+
+## M7.3 (Insufficient-Evidence Fallback Tier)
+- 證據（`validation/regression_cases/m7_3_preview_insufficient/`）：長片完整
+  投球稀少（如 37 分鐘 6 顆），180 秒 preview 多半看不到 → insufficient 判
+  reject 多屬取樣運氣。11 支 insufficient 來源完整跑：4 支 ≥3 clips（目視
+  14/16 正確，與 gate 通過者相當）；3 支僅 1–2 clips（1/4 正確）。
+- 選源改為三層：recommended → borderline（MLB/unknown）→ insufficient
+  reject（preview CF>0、MLB/unknown、取得成功；依 preview CF、再依 M3 分數）。
+  recommended 全失敗時也會往下試 borderline。
+- preview 沒看過任何完整投球的來源（insufficient 層，以及僅憑 CF 比例進
+  borderline、0 event 者）須完整跑出 ≥ `FEW_CLIPS`（3）clips 才採用，否則
+  `low-yield`（不產檔、試下一位）；insufficient 層 manifest 標
+  `source_selection_mode=insufficient_evidence_fallback` 並加 warning。
+  （e2e：Edwin 0-event borderline 來源 2 clips，1 顆疑似缺起始 → 現在不出。）
+- 仍永不 fallback：sufficient_bad、preview 零 CF、non_mlb、取得失敗。
+  （sufficient_bad 有 1/2 誤殺紀錄，樣本太少未改。）
+- 修正：完整影片零 CF candidate 時不再 AssertionError，改 `no-usable-clips`。
+- M1/M2/Gate 判斷與門檻全未動；只改「哪些來源可當備援、何時算成功」。

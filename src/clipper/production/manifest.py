@@ -35,6 +35,9 @@ def build_warnings(m: dict) -> tuple[bool, list[str]]:
     warnings: list[str] = []
     if m.get("source_selection_mode") == "borderline_fallback":
         warnings.append("borderline source fallback (no recommended source)")
+    elif m.get("source_selection_mode") == "insufficient_evidence_fallback":
+        warnings.append("insufficient preview evidence fallback "
+                        "(accepted only on full-run yield)")
     cf = m.get("center_field_candidates") or 0
     comp = m.get("complete_events") or 0
     if cf and comp / cf < LOW_YIELD:
@@ -53,6 +56,9 @@ def build_warnings(m: dict) -> tuple[bool, list[str]]:
         warnings.append("replay detection conservative (uncertain)")
     if m.get("status") == "no-usable-clips":
         warnings.append("no usable clips from this source")
+    if m.get("status") == "low-yield":
+        warnings.append(f"{final} final clips < {m.get('min_final_clips')} "
+                        "required; source not used")
     return bool(warnings), warnings
 
 

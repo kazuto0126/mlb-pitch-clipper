@@ -18,6 +18,7 @@ from pathlib import Path
 from src.clipper.acquisition.run_preview import run_preview
 from src.clipper.discovery.competition import classify_competition
 from src.clipper.discovery.run_discovery import run_discovery, slug
+from src.clipper.production.manifest import FEW_CLIPS
 from src.clipper.production.naming import reliable_game_year
 from src.clipper.production.run_source import produce_source
 
@@ -33,28 +34,66 @@ def year_filter_ok(s: dict, year: int) -> bool:
     return not (pub.isdigit() and int(pub) < year)
 
 
+INSUFFICIENT_FALLBACK = "insufficient_evidence_fallback"
+
+
+def _insufficient_fallback_ok(rep: dict) -> bool:
+    """Preview too sparse to judge (not evidence of a bad source): CF seen,
+    MLB/unknown context, acquisition worked. sufficient_bad, zero-CF,
+    non-MLB and failed previews stay vetoed."""
+    return (rep.get("preview_decision") == "reject"
+            and rep.get("evidence_state") == "insufficient"
+            and (rep.get("center_field_shots") or 0) > 0
+            and rep.get("competition_context", "unknown") in ("mlb", "unknown")
+            and rep.get("preview_status") in ("ok", "partial"))
+
+
+def _min_final_clips(mode: str, rep: dict) -> int:
+    """Sources the preview never saw a complete event in (insufficient tier,
+    borderline on CF alone) must prove themselves in the full run: 1-2 clip
+    outputs from them were mostly wrong views (M7.3 audit: 1/4 good)."""
+    if mode == INSUFFICIENT_FALLBACK:
+        return FEW_CLIPS
+    if mode == "borderline_fallback" and not rep.get("m2_complete_events"):
+        return FEW_CLIPS
+    return 1
+
+
 def pick_sources(selected: list[dict], preview_reports: list[dict]) -> tuple[list[dict], str]:
-    """recommended first; else best borderline MLB/unknown; never reject."""
+    """Tiered pool: recommended -> borderline MLB/unknown -> insufficient-
+    evidence rejects (M7.3). Each candidate carries min_final_clips (see
+    _min_final_clips). Returns (pool, mode of the first tier present)."""
     by_id = {r["video_id"]: r for r in preview_reports}
-    rec = [s for s in selected
-           if by_id.get(s["video_id"], {}).get("preview_decision") == "recommended"]
-    if rec:
-        mode = "recommended"
-        pool = rec
-    else:
-        pool = [s for s in selected if by_id.get(s["video_id"], {}).get(
-            "preview_decision") == "borderline" and by_id[s["video_id"]].get(
-            "competition_context", "unknown") in ("mlb", "unknown")]
-        mode = "borderline_fallback"
-    # order: M2 preview evidence (events), then M3 score
-    pool = sorted(pool, key=lambda s: (
-        by_id.get(s["video_id"], {}).get("m2_complete_events", 0),
-        ((s.get("suitability") or {}).get("final_score", 0.0))), reverse=True)
-    for s in pool:
-        s["preview_decision"] = by_id.get(s["video_id"], {}).get("preview_decision")
-        s["competition_context"] = by_id.get(s["video_id"], {}).get(
-            "competition_context", "unknown")
-        s["source_selection_mode"] = mode
+
+    def rep(s):
+        return by_id.get(s["video_id"], {})
+
+    def score(s):
+        return (s.get("suitability") or {}).get("final_score", 0.0)
+
+    rec = [s for s in selected if rep(s).get("preview_decision") == "recommended"]
+    border = [s for s in selected if rep(s).get("preview_decision") == "borderline"
+              and rep(s).get("competition_context", "unknown") in ("mlb", "unknown")]
+    insuff = [s for s in selected if _insufficient_fallback_ok(rep(s))]
+    # order: M2 preview evidence (events), then M3 score; the insufficient
+    # tier has no events by definition, so preview CF evidence comes first.
+    tiers = [
+        ("recommended", sorted(rec, key=lambda s: (
+            rep(s).get("m2_complete_events", 0), score(s)), reverse=True)),
+        ("borderline_fallback", sorted(border, key=lambda s: (
+            rep(s).get("m2_complete_events", 0), score(s)), reverse=True)),
+        (INSUFFICIENT_FALLBACK, sorted(insuff, key=lambda s: (
+            rep(s).get("center_field_shots", 0), score(s)), reverse=True)),
+    ]
+    pool = []
+    for mode, group in tiers:
+        for s in group:
+            s["preview_decision"] = rep(s).get("preview_decision")
+            s["competition_context"] = rep(s).get("competition_context", "unknown")
+            s["source_selection_mode"] = mode
+            s["min_final_clips"] = _min_final_clips(mode, rep(s))
+            pool.append(s)
+    mode = pool[0]["source_selection_mode"] if pool else "borderline_fallback"
     return pool, mode
 
 
@@ -151,14 +190,18 @@ def _run_chain(args, rid: str, root: Path):
     for cand in pool:
         try:
             man = produce_source(args.pitcher, cand,
-                                 str(root / "sources" / cand["video_id"]), taken)
+                                 str(root / "sources" / cand["video_id"]), taken,
+                                 min_final_clips=cand.get("min_final_clips", 1))
         except Exception as e:  # never crash the run on one source
             man = {"pitcher_name": args.pitcher, "video_id": cand.get("video_id", ""),
+                   "source_selection_mode": cand["source_selection_mode"],
                    "status": f"failed-exception: {str(e)[:200]}"}
         results.append(man)
         if man.get("status") == "ok":
             break
     ok = [m for m in results if m.get("status") == "ok"]
+    if ok:  # run-level mode = tier that actually produced the output
+        mode = ok[0].get("source_selection_mode", mode)
     dl_failed = [m for m in results
                  if (m.get("status") or "").startswith("failed-download")]
     if ok:

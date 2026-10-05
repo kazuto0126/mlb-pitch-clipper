@@ -29,8 +29,11 @@ null become `UnknownYear`. The manifest keeps the raw `game_year` /
 - precision > recall: tightly edited broadcasts may lose pitches.
 - Conservative replay/duplicate handling: a few replays may remain;
   false deletion is treated as worse than a missed duplicate.
-- YouTube availability changes over time; relievers/short sources may
-  gate-block on sparse preview evidence.
+- YouTube availability changes over time. Sources whose preview saw no
+  complete pitch (too sparse to judge, or borderline on center-field ratio
+  alone) must yield ≥3 clips in the full run or are not used; sparse ones
+  are only a last fallback (`source_selection_mode=insufficient_evidence_fallback`).
+  1–2 clip outputs from such sources were mostly wrong views.
 - Strict shot purity may reject usable events inside impure containers.
 - An occasional wrong-view segment may still slip through (no perfect detection claimed).
 - WBC/NPB/amateur/bullpen footage is excluded from production by default.

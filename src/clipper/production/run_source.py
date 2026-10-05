@@ -29,7 +29,10 @@ def _qsum(by_reason: dict, get):
 
 
 def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
-                   filename_taken: set, downloader=acquire_full) -> dict:
+                   filename_taken: set, downloader=acquire_full,
+                   min_final_clips: int = 1) -> dict:
+    """min_final_clips > 1: fewer kept clips -> status low-yield, no product
+    file (M7.3: insufficient-evidence sources must prove themselves)."""
     sdir = Path(source_dir)
     (sdir / "source").mkdir(parents=True, exist_ok=True)
     (sdir / "intermediate").mkdir(parents=True, exist_ok=True)
@@ -82,13 +85,17 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     man["rejected_low_confidence"] = m1_rej.get("low_view_confidence", 0)
     man["rejected_transition"] = m1_rej.get("transition_contaminated", 0)
     man["rejected_homogeneous_closeup"] = m1_rej.get("homogeneous_closeup", 0)
-    # 4. calibrated M2 (DEFAULT_PARAMS)
-    m2 = run_m2(m1out, video=src)
+    # 4. calibrated M2 (DEFAULT_PARAMS). M2 asserts non-empty input, so a
+    # source with zero CF candidates goes straight to no-usable-clips.
+    if cands:
+        run_m2(m1out, video=src)
+    else:
+        for name in ("events.json", "rejected_events.json"):
+            (Path(m1out) / name).write_text("[]", encoding="utf-8")
     events = json.loads((Path(m1out) / "events.json").read_text(encoding="utf-8"))
     rejected = json.loads((Path(m1out) / "rejected_events.json").read_text(encoding="utf-8"))
     shutil.copy(Path(m1out) / "events.json", sdir / "events.json")
     shutil.copy(Path(m1out) / "rejected_events.json", sdir / "rejected_events.json")
-    _ = m2
     by_reason: dict = {}
     for r in rejected:
         by_reason[r["reject_reason"]] = by_reason.get(r["reject_reason"], 0) + 1
@@ -139,6 +146,8 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     if not kept:
         man["status"] = "no-usable-clips"
         return _finish("no-usable-clips")
+    if len(kept) < min_final_clips:
+        return _finish("low-yield", {"min_final_clips": min_final_clips})
     # 7. merge + product filename
     final_tmp = str(sdir / "final.mp4")
     mg = merge_clips([c["path"] for c in kept], final_tmp)
