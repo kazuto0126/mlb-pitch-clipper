@@ -105,6 +105,9 @@ def main() -> None:
     ap.add_argument("--keep-source", action="store_true")
     ap.add_argument("--diagnostics", action="store_true")
     ap.add_argument("--out-root", default="output")
+    ap.add_argument("--deliver-to", default=None,
+                    help="hand-off folder shared with a downstream project "
+                         "(see docs/DOWNSTREAM_CONTRACT.md)")
     args = ap.parse_args()
 
     rid = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -242,6 +245,16 @@ def _run_chain(args, rid: str, root: Path):
         "finals": [m.get("final_path") for m in ok],
         "results": results,
     }
+    # hand-off to a downstream project: only via the delivery folder
+    deliver_to = getattr(args, "deliver_to", None)
+    if deliver_to and ok:
+        from src.clipper.production.deliver import deliver_source
+        try:
+            manifest["deliveries"] = [deliver_source(root, m, deliver_to,
+                                                     slug(args.pitcher), rid)
+                                      for m in ok]
+        except Exception as e:  # the product exists locally; report, don't crash
+            manifest["delivery_error"] = f"{type(e).__name__}: {str(e)[:200]}"
     (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                             encoding="utf-8")
     print(json.dumps({k: v for k, v in manifest.items() if k != "results"}, indent=2))
