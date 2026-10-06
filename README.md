@@ -30,9 +30,12 @@ python run.py "Shohei Ohtani"
 正常使用只需要投手英文名。可選 flags：`--top-n 3`、`--max-sources 3`、
 `--year 2026`。不需要手動提供 URL、選片、標 clips 或刪 replay。
 
-交給下游專案：加 `--deliver-to <交付資料夾>`（放在兩個 repo 之外），成品與
-`delivery.json` 會寫入該資料夾並登記到 `index.jsonl`；規格見
-`docs/DOWNSTREAM_CONTRACT.md`「HAND-OFF FOLDER」。兩專案只透過這個資料夾溝通。
+交給下游專案：加 `--deliver-to <交付資料夾>`（放在兩個 repo 之外）與
+`--throws R|L`（左右投由操作者提供）。每顆球一個 MP4＋配對 JSON，以批次寫入並
+登記到 `index.jsonl`；規格見 `docs/HANDOFF_CONTRACT.md`（會複製到交付資料夾的
+`CONTRACT.md`）。已產出的 run 也可事後交付：
+`python -m src.clipper.production.deliver --run output/<slug>/<run_id> --to <資料夾> --throws R`。
+兩專案只透過這個資料夾溝通。
 
 ## Example
 

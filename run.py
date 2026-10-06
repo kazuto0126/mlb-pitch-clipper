@@ -107,7 +107,10 @@ def main() -> None:
     ap.add_argument("--out-root", default="output")
     ap.add_argument("--deliver-to", default=None,
                     help="hand-off folder shared with a downstream project "
-                         "(see docs/DOWNSTREAM_CONTRACT.md)")
+                         "(see docs/HANDOFF_CONTRACT.md)")
+    ap.add_argument("--throws", choices=("R", "L", "unknown"), default="unknown",
+                    help="pitching hand, provided by the operator (written to "
+                         "every delivered pitch; never inferred from video)")
     args = ap.parse_args()
 
     rid = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -251,7 +254,8 @@ def _run_chain(args, rid: str, root: Path):
         from src.clipper.production.deliver import deliver_source
         try:
             manifest["deliveries"] = [deliver_source(root, m, deliver_to,
-                                                     slug(args.pitcher), rid)
+                                                     slug(args.pitcher), rid,
+                                                     getattr(args, "throws", "unknown"))
                                       for m in ok]
         except Exception as e:  # the product exists locally; report, don't crash
             manifest["delivery_error"] = f"{type(e).__name__}: {str(e)[:200]}"
