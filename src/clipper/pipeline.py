@@ -33,10 +33,15 @@ def run_pipeline(video: str, outdir: str, prefer_clip: bool = True) -> dict:
     backend = getattr(clf, "backend", type(clf).__name__)
 
     records: list[dict] = []
+    emb_ids: list[str] = []
+    embs: list = []
     for i, s in enumerate(shots):
         times = shot_sample_times(s.start, s.end)
         frames = sample_frames(video, times)
         res = clf.classify(frames)
+        if res.embedding is not None:  # kept for the M7.6 framing check
+            emb_ids.append(f"s{i:03d}")
+            embs.append(res.embedding)
         # M6.3/M6.4 purity: confidence gate (cheap) -> close-up veto
         # (margin free + 1 frame) -> dissolve guard (CF survivors only).
         contaminated = False
@@ -71,6 +76,10 @@ def run_pipeline(video: str, outdir: str, prefer_clip: bool = True) -> dict:
 
     (out / "shots.json").write_text(json.dumps(records, indent=2), encoding="utf-8")
     (out / "candidates.json").write_text(json.dumps(cands, indent=2), encoding="utf-8")
+    if embs:
+        import numpy as np
+        np.savez_compressed(out / "embeddings.npz", ids=np.array(emb_ids),
+                            embs=np.stack(embs).astype(np.float16))
 
     with open(out / "diagnostics" / "scores.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)

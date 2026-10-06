@@ -272,4 +272,18 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 回放：成品只少掉那 3 顆錯的；100 次 preview 中 93 不變，改變者仍在
   M7.3 fallback 層內；M6.4 已驗證的正確鏡頭 margin 皆 ≥0.590 不受影響。
 - 未處理：margin ≥0.39 的打者特寫 / 反向機位，以及 M2 時間性錯誤
-  （起點被切、投後畫面、尾端切鏡）。
+  （起點被切、投後畫面、尾端切鏡）。→ 前者由 M7.6 處理。
+
+## M7.6 (Per-Source CF Framing Consistency)
+- 證據（`validation/regression_cases/m7_6_framing_consistency/`）：同一支
+  轉播的中外野機位構圖幾乎固定。以該來源 margin≥0.6 的 CF shot 為原型，
+  比較 CLIP 影像嵌入（M1 本來就算的）之 3-NN cosine：16 來源交付成品中
+  9 顆錯誤視角（打者特寫×4、投手特寫×3、反向機位×2）為 0.695–0.882，
+  63 顆正確者全 ≥0.950。
+- 新規則（僅 production、M1 之後 M2 之前）：knn < 0.90 →
+  `framing_inconsistent`；原型 <5 或無嵌入（heuristic）則跳過。
+  M1 另存 `embeddings.npz`。不用身體/臉/身分特徵、無投手特例。
+- 全部已接受 CF shot 中 knn<0.92 的有 24%，但其上僅有那 9 顆錯誤事件；
+  重下載抽樣 20 支中 18 支非 CF，2 支真 CF 在 0.904/0.911（高於門檻）。
+- 已知限制：原型本身錯（隔網 fan footage）時無效，靠 preview 零 CF veto；
+  剪輯插入的他場 CF 鏡頭可能被擋（本來就不是該場）。

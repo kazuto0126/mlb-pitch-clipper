@@ -60,6 +60,9 @@ class ViewResult:
     confidence: float
     scores: dict[str, float]
     backend: str
+    # L2-normalized mean CLIP image embedding of the shot's frames (None
+    # for the heuristic backend); used by the M7.6 framing consistency check.
+    embedding: np.ndarray | None = None
 
 
 class CLIPViewClassifier:
@@ -100,7 +103,8 @@ class CLIPViewClassifier:
             probs = F.softmax(logits, dim=-1).cpu().numpy()
         scores = {k: float(probs[i]) for i, k in enumerate(VIEW_LABELS)}
         best = max(scores, key=lambda k: scores[k])
-        return ViewResult(best, scores[best], scores, self.backend)
+        return ViewResult(best, scores[best], scores, self.backend,
+                          embedding=avg.cpu().numpy().astype(np.float32))
 
 
 class HeuristicViewClassifier:

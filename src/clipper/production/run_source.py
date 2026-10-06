@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 
 from ..acquisition.full_acquire import acquire_full
+from ..framing import apply_framing_veto
 from ..pipeline import run_pipeline as run_m1
 from ..run_m2 import run_m2
 from .clips import extract_clip
@@ -71,6 +72,9 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     # 3. frozen M1 on the full video
     m1out = str(sdir / "m1")
     run_m1(src, m1out, prefer_clip=True)
+    # M7.6: per-source CF framing consistency (rewrites shots/candidates)
+    framing = apply_framing_veto(m1out)
+    man["framing_check"] = framing["status"]
     shots = json.loads((Path(m1out) / "shots.json").read_text(encoding="utf-8"))
     cands = json.loads((Path(m1out) / "candidates.json").read_text(encoding="utf-8"))
     shutil.copy(Path(m1out) / "shots.json", sdir / "shots.json")
@@ -85,6 +89,7 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     man["rejected_low_confidence"] = m1_rej.get("low_view_confidence", 0)
     man["rejected_transition"] = m1_rej.get("transition_contaminated", 0)
     man["rejected_homogeneous_closeup"] = m1_rej.get("homogeneous_closeup", 0)
+    man["rejected_framing_inconsistent"] = m1_rej.get("framing_inconsistent", 0)
     # 4. calibrated M2 (DEFAULT_PARAMS). M2 asserts non-empty input, so a
     # source with zero CF candidates goes straight to no-usable-clips.
     if cands:
