@@ -54,6 +54,10 @@ SHOT_EDGE = 0.1    # s kept after a shot's detected start (always on/after the c
 SHOT_END_EDGE = 0.25
 NEIGHBOUR_GAP = 0.3  # s kept away from another pitch in the same shot
 HARD_CUT_DIFF = 20.0  # mean abs frame diff (320x180); in-shot frames stay < 5
+# Same-camera jump cuts (edits that drop the time between pitches) change
+# little but all at once: one isolated frame diff many times the local
+# level (Glasnow fan edit: 6.9-7.3 vs ~0.6). Pans rise and fall gradually.
+JUMP_CUT_MIN, JUMP_CUT_RATIO = 3.0, 4.0
 MAX_CLIP_SEC = 30.0
 MIN_BATCH_PITCHES = 3
 CONTRACT_SRC = Path(__file__).resolve().parents[3] / "docs" / "HANDOFF_CONTRACT.md"
@@ -69,7 +73,7 @@ CHECKS = {
     "continuous_shot": ("verified_by_pipeline", "inside one detected shot "
                         "(end kept 0.25 s clear of the 5 fps cut grid); "
                         "transition guard on the shot; delivered file scanned "
-                        "frame by frame for hard cuts"),
+                        "frame by frame for hard cuts and same-camera jump cuts"),
     "view_rear_centerfield": ("verified_by_pipeline", "CLIP view class + "
                               "close-up vetoes + per-source framing consistency"),
     "normal_speed_export": ("verified_by_pipeline", "no speed change, original "
@@ -133,18 +137,27 @@ def probe_pitch(path: Path) -> dict:
 
 
 def hard_cuts(path: Path) -> list[int]:
-    """Frame indices that start a new picture (hard cut) in a delivered file."""
+    """Frame indices that start a new picture in a delivered file: a hard
+    cut, or a same-camera jump cut (isolated spike over the local level)."""
     cap = cv2.VideoCapture(str(path))
-    cuts, prev, i = [], None, 0
+    d, prev = [], None
     while True:
         ok, f = cap.read()
         if not ok:
             break
         g = cv2.resize(f, (320, 180))
-        if prev is not None and float(np.mean(cv2.absdiff(g, prev))) > HARD_CUT_DIFF:
-            cuts.append(i)
-        prev, i = g, i + 1
+        if prev is not None:
+            d.append(float(np.mean(cv2.absdiff(g, prev))))
+        prev = g
     cap.release()
+    cuts = []
+    for i, x in enumerate(d):  # d[i] is the change into frame i + 1
+        local = d[max(0, i - 15):max(0, i - 1)] + d[i + 2:i + 16]
+        isolated = (i == 0 or d[i - 1] < x / 2) and (i + 1 >= len(d) or d[i + 1] < x / 2)
+        if x > HARD_CUT_DIFF or (
+                local and isolated and x > JUMP_CUT_MIN
+                and x > JUMP_CUT_RATIO * max(float(np.median(local)), 0.3)):
+            cuts.append(i + 1)
     return cuts
 
 

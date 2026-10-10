@@ -24,14 +24,15 @@ EVENTS = [  # two pitches in s000, one near the start of s001
 ]
 
 
-def _fake_run(base: Path, vid="vid1", run_id="RID", cut_at=None):
+def _fake_run(base: Path, vid="vid1", run_id="RID", cut_at=None, jump=120):
     root = base / "out" / "test-pitcher" / run_id
     sdir = root / "sources" / vid
     (sdir / "intermediate").mkdir(parents=True)
     w = cv2.VideoWriter(str(sdir / "intermediate" / "normalized.mp4"),
                         cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 120))
+    size = jump
     for i in range(200):  # 20 s @ 10 fps, brightness encodes time
-        jump = 120 if cut_at is not None and i >= cut_at else 0  # undetected hard cut
+        jump = size if cut_at is not None and i >= cut_at else 0  # undetected cut
         w.write(np.full((120, 160, 3), min(255, i % 250 + jump), dtype=np.uint8))
     w.release()
     (sdir / "shots.json").write_text(json.dumps(SHOTS), encoding="utf-8")
@@ -84,6 +85,14 @@ def test_refuses_pitch_with_hidden_cut_and_leaves_nothing(tmp_path):
         deliver_source(root, man, str(dest), "test-pitcher", "RID")
     assert not (dest / "test-pitcher" / "RID_vid1").exists()
     assert not (dest / "index.jsonl").exists()
+
+
+def test_hard_cuts_finds_small_same_camera_jump_but_not_steady_change(tmp_path):
+    from src.clipper.production.deliver import hard_cuts
+    root, _ = _fake_run(tmp_path / "a", cut_at=50, jump=8)  # +8 jump vs +1/frame
+    assert hard_cuts(root / "sources" / "vid1" / "intermediate" / "normalized.mp4") == [50]
+    root, _ = _fake_run(tmp_path / "b")  # steady +1/frame: no cut
+    assert hard_cuts(root / "sources" / "vid1" / "intermediate" / "normalized.mp4") == []
 
 
 def test_batch_files_facts_and_checks(tmp_path):

@@ -61,7 +61,7 @@
 |---|---|---|
 | `single_motion_event` | verified_by_pipeline | 一個完整動作事件；邊界不跨入同鏡頭的其他事件 |
 | `pitch_delivery_visible` | **not_verified** | 動作偵測可能被捕手／打者的動作觸發，而投手其實沒有投球 |
-| `continuous_shot` | verified_by_pipeline | 在一個偵測到的鏡頭內（結尾與偵測切點保持 0.25 秒以上），經過轉場檢查，交付檔並逐格掃描確認沒有硬切 |
+| `continuous_shot` | verified_by_pipeline | 在一個偵測到的鏡頭內（結尾與偵測切點保持 0.25 秒以上），經過轉場檢查，交付檔並逐格掃描確認沒有硬切，也沒有同機位的跳接（剪掉兩球之間空檔的剪輯點） |
 | `view_rear_centerfield` | verified_by_pipeline | 視角分類＋特寫排除＋同來源構圖一致性 |
 | `normal_speed_export` | verified_by_pipeline | 輸出不變速、保留原格率、不補格 |
 | `not_replay_or_slow_motion` | **not_verified** | 重播偵測保守，可能殘留慢動作重播 |
