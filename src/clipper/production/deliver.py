@@ -16,10 +16,12 @@ Per-pitch bounds: M2's clip widened to PRE_ROLL before motion onset and
 POST_ROLL after settle (set position and full follow-through), never past
 the detected shot (one continuous camera shot) nor into a neighbouring
 pitch of the same shot, never shorter than M2's own clip, <= MAX_CLIP_SEC.
+Each extracted file is scanned for hard cuts before it is accepted.
 
 Every file is written as *.tmp then os.replace'd and the index line is
 appended last, so a reader following index.jsonl never sees a partial
-batch. Batches are immutable; a re-run is a new batch_id.
+batch; a batch that fails midway is removed. Batches are immutable; a
+re-run is a new batch_id.
 
 CLI (deliver an already produced run):
   python -m src.clipper.production.deliver --run output/<slug>/<run_id> \
@@ -36,6 +38,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from .clips import extract_clip
 
 CONTRACT_VERSION = 2
@@ -43,8 +48,12 @@ INDEX = "index.jsonl"
 VIEW = "rear_centerfield_broadcast"
 PRE_ROLL = 2.0     # s before motion onset (set position / preparation)
 POST_ROLL = 1.5    # s after settle (follow-through to balance)
-SHOT_EDGE = 0.1    # s kept away from detected cuts
+SHOT_EDGE = 0.1    # s kept after a shot's detected start (always on/after the cut)
+# segment.py samples at 5 fps and stamps a cut on the first sample after
+# it, so a detected shot end can be up to 0.2 s past the real cut
+SHOT_END_EDGE = 0.25
 NEIGHBOUR_GAP = 0.3  # s kept away from another pitch in the same shot
+HARD_CUT_DIFF = 20.0  # mean abs frame diff (320x180); in-shot frames stay < 5
 MAX_CLIP_SEC = 30.0
 MIN_BATCH_PITCHES = 3
 CONTRACT_SRC = Path(__file__).resolve().parents[3] / "docs" / "HANDOFF_CONTRACT.md"
@@ -57,8 +66,10 @@ CHECKS = {
     "pitch_delivery_visible": ("not_verified", "the motion detector can fire on "
                                "catcher/batter movement while the pitcher stands "
                                "(seen in the M7.7 audit)"),
-    "continuous_shot": ("verified_by_pipeline", "inside one detected shot; "
-                        "dissolve/transition guard on the shot"),
+    "continuous_shot": ("verified_by_pipeline", "inside one detected shot "
+                        "(end kept 0.25 s clear of the 5 fps cut grid); "
+                        "transition guard on the shot; delivered file scanned "
+                        "frame by frame for hard cuts"),
     "view_rear_centerfield": ("verified_by_pipeline", "CLIP view class + "
                               "close-up vetoes + per-source framing consistency"),
     "normal_speed_export": ("verified_by_pipeline", "no speed change, original "
@@ -121,9 +132,25 @@ def probe_pitch(path: Path) -> dict:
             "has_audio": bool(audio)}
 
 
+def hard_cuts(path: Path) -> list[int]:
+    """Frame indices that start a new picture (hard cut) in a delivered file."""
+    cap = cv2.VideoCapture(str(path))
+    cuts, prev, i = [], None, 0
+    while True:
+        ok, f = cap.read()
+        if not ok:
+            break
+        g = cv2.resize(f, (320, 180))
+        if prev is not None and float(np.mean(cv2.absdiff(g, prev))) > HARD_CUT_DIFF:
+            cuts.append(i)
+        prev, i = g, i + 1
+    cap.release()
+    return cuts
+
+
 def pitch_bounds(event: dict, shot: dict, same_shot_events: list[dict]) -> tuple[float, float]:
     start = max(shot["start"] + SHOT_EDGE, event["motion_onset"] - PRE_ROLL)
-    end = min(shot["end"] - SHOT_EDGE, event["settle_time"] + POST_ROLL)
+    end = min(shot["end"] - SHOT_END_EDGE, event["settle_time"] + POST_ROLL)
     for o in same_shot_events:
         if o["event_id"] == event["event_id"]:
             continue
@@ -131,7 +158,10 @@ def pitch_bounds(event: dict, shot: dict, same_shot_events: list[dict]) -> tuple
             start = max(start, o["settle_time"] + NEIGHBOUR_GAP)
         if o["motion_onset"] >= event["settle_time"]:   # later pitch
             end = min(end, o["motion_onset"] - NEIGHBOUR_GAP)
-    start, end = min(start, event["clip_start"]), max(end, event["clip_end"])
+    # never shorter than M2's clip, except where it runs into the uncertain
+    # zone before the detected shot end
+    start = min(start, event["clip_start"])
+    end = min(max(end, event["clip_end"]), shot["end"] - SHOT_END_EDGE)
     if end - start > MAX_CLIP_SEC:
         end = start + MAX_CLIP_SEC
     return round(start, 3), round(end, 3)
@@ -174,59 +204,67 @@ def deliver_source(run_root: Path, source_manifest: dict, deliver_root: str,
     game = {"season": _season(m), "season_confidence": m.get("game_year_confidence"),
             "team": "unknown", "opponent": "unknown", "game_id": "unknown",
             "pitch_type": "unknown"}
-    pitches, excluded = [], []
-    for k, c in enumerate(kept, 1):
-        e = by_id[c["clip_id"]]
-        shot = shots[e["source_shot_id"]]
-        same = [x for x in events if x["source_shot_id"] == e["source_shot_id"]]
-        s, t = pitch_bounds(e, shot, same)
-        if k in exclude:
-            excluded.append({"kept_index": k, "source_start_sec": s,
-                             "source_end_sec": t, "reason": exclude[k]})
-            continue
-        i = len(pitches) + 1
-        pitch_id = f"{batch_id}_p{i:02d}"
-        mp4 = bdir / f"{pitch_id}.mp4"
-        tmp = bdir / f"{pitch_id}.tmp.mp4"
-        r = extract_clip(str(video), s, t, str(tmp))
-        if not r.get("ok"):
-            raise RuntimeError(f"extract {pitch_id}: {r.get('error')}")
-        os.replace(tmp, mp4)
-        rec = {
-            "contract_version": CONTRACT_VERSION, "pitch_id": pitch_id,
-            "batch_id": batch_id, "index": i, "created_utc": created,
-            "pitcher_name": m.get("pitcher_name"), "throws": throws,
-            "view": VIEW, "video_file": mp4.name, "sha256": _sha256(mp4),
-            "video": probe_pitch(mp4),
-            "source": {**source, "start_sec": s, "end_sec": t},
-            "game": game,
-            "pipeline_anchors_sec": {
-                "motion_onset": round(e["motion_onset"] - s, 3),
-                "motion_peak": round(e["motion_peak"] - s, 3),
-                "settle": round(e["settle_time"] - s, 3),
-                "note": "motion-energy anchors relative to frame 0; NOT "
-                        "biomechanical events (no release/foot-strike claim)"},
-            "checks": {k: {"status": st, "how": how} for k, (st, how) in CHECKS.items()},
-            "requires_human_review": [k for k, (st, _) in CHECKS.items() if st != "verified_by_pipeline"],
-        }
-        _atomic_json(bdir / f"{pitch_id}.json", rec)
-        pitches.append(rec)
-    viewing = None
-    if m.get("final_path") and (run_root / m["final_path"]).exists():
-        (bdir / "viewing").mkdir(exist_ok=True)
-        dst = bdir / "viewing" / m["final_path"]
-        shutil.copyfile(run_root / m["final_path"], dst.with_name(dst.name + ".tmp"))
-        os.replace(dst.with_name(dst.name + ".tmp"), dst)
-        viewing = f"viewing/{m['final_path']}"
-    batch = {"contract_version": CONTRACT_VERSION, "batch_id": batch_id,
-             "created_utc": created, "pitcher_name": m.get("pitcher_name"),
-             "throws": throws, "view": VIEW, "pitch_count": len(pitches),
-             "pitches": [{"pitch_id": p["pitch_id"], "video_file": p["video_file"],
-                          "json": f"{p['pitch_id']}.json"} for p in pitches],
-             "source": source, "game": game, "viewing_video": viewing,
-             "excluded_by_operator": excluded,
-             "quality_warning": m.get("quality_warning"), "warnings": m.get("warnings", [])}
-    _atomic_json(bdir / "batch.json", batch)
+    try:
+        pitches, excluded = [], []
+        for k, c in enumerate(kept, 1):
+            e = by_id[c["clip_id"]]
+            shot = shots[e["source_shot_id"]]
+            same = [x for x in events if x["source_shot_id"] == e["source_shot_id"]]
+            s, t = pitch_bounds(e, shot, same)
+            if k in exclude:
+                excluded.append({"kept_index": k, "source_start_sec": s,
+                                 "source_end_sec": t, "reason": exclude[k]})
+                continue
+            i = len(pitches) + 1
+            pitch_id = f"{batch_id}_p{i:02d}"
+            mp4 = bdir / f"{pitch_id}.mp4"
+            tmp = bdir / f"{pitch_id}.tmp.mp4"
+            r = extract_clip(str(video), s, t, str(tmp))
+            if not r.get("ok"):
+                raise RuntimeError(f"extract {pitch_id}: {r.get('error')}")
+            cuts = hard_cuts(tmp)
+            if cuts:
+                raise RuntimeError(f"{pitch_id} (kept #{k}, {s}-{t}s) has a hard cut at "
+                                   f"frame {cuts}; exclude it or check the shot bounds")
+            os.replace(tmp, mp4)
+            rec = {
+                "contract_version": CONTRACT_VERSION, "pitch_id": pitch_id,
+                "batch_id": batch_id, "index": i, "created_utc": created,
+                "pitcher_name": m.get("pitcher_name"), "throws": throws,
+                "view": VIEW, "video_file": mp4.name, "sha256": _sha256(mp4),
+                "video": probe_pitch(mp4),
+                "source": {**source, "start_sec": s, "end_sec": t},
+                "game": game,
+                "pipeline_anchors_sec": {
+                    "motion_onset": round(e["motion_onset"] - s, 3),
+                    "motion_peak": round(e["motion_peak"] - s, 3),
+                    "settle": round(e["settle_time"] - s, 3),
+                    "note": "motion-energy anchors relative to frame 0; NOT "
+                            "biomechanical events (no release/foot-strike claim)"},
+                "checks": {k: {"status": st, "how": how} for k, (st, how) in CHECKS.items()},
+                "requires_human_review": [k for k, (st, _) in CHECKS.items() if st != "verified_by_pipeline"],
+            }
+            _atomic_json(bdir / f"{pitch_id}.json", rec)
+            pitches.append(rec)
+        viewing = None
+        if m.get("final_path") and (run_root / m["final_path"]).exists():
+            (bdir / "viewing").mkdir(exist_ok=True)
+            dst = bdir / "viewing" / m["final_path"]
+            shutil.copyfile(run_root / m["final_path"], dst.with_name(dst.name + ".tmp"))
+            os.replace(dst.with_name(dst.name + ".tmp"), dst)
+            viewing = f"viewing/{m['final_path']}"
+        batch = {"contract_version": CONTRACT_VERSION, "batch_id": batch_id,
+                 "created_utc": created, "pitcher_name": m.get("pitcher_name"),
+                 "throws": throws, "view": VIEW, "pitch_count": len(pitches),
+                 "pitches": [{"pitch_id": p["pitch_id"], "video_file": p["video_file"],
+                              "json": f"{p['pitch_id']}.json"} for p in pitches],
+                 "source": source, "game": game, "viewing_video": viewing,
+                 "excluded_by_operator": excluded,
+                 "quality_warning": m.get("quality_warning"), "warnings": m.get("warnings", [])}
+        _atomic_json(bdir / "batch.json", batch)
+    except BaseException:
+        shutil.rmtree(bdir, ignore_errors=True)  # never indexed, so never seen
+        raise
     if CONTRACT_SRC.exists():
         tmp = root / "CONTRACT.md.tmp"
         shutil.copyfile(CONTRACT_SRC, tmp)

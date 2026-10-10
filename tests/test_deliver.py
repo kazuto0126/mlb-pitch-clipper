@@ -24,14 +24,15 @@ EVENTS = [  # two pitches in s000, one near the start of s001
 ]
 
 
-def _fake_run(base: Path, vid="vid1", run_id="RID"):
+def _fake_run(base: Path, vid="vid1", run_id="RID", cut_at=None):
     root = base / "out" / "test-pitcher" / run_id
     sdir = root / "sources" / vid
     (sdir / "intermediate").mkdir(parents=True)
     w = cv2.VideoWriter(str(sdir / "intermediate" / "normalized.mp4"),
                         cv2.VideoWriter_fourcc(*"mp4v"), 10, (160, 120))
     for i in range(200):  # 20 s @ 10 fps, brightness encodes time
-        w.write(np.full((120, 160, 3), i % 250, dtype=np.uint8))
+        jump = 120 if cut_at is not None and i >= cut_at else 0  # undetected hard cut
+        w.write(np.full((120, 160, 3), min(255, i % 250 + jump), dtype=np.uint8))
     w.release()
     (sdir / "shots.json").write_text(json.dumps(SHOTS), encoding="utf-8")
     (sdir / "events.json").write_text(json.dumps(EVENTS), encoding="utf-8")
@@ -63,6 +64,26 @@ def test_pitch_bounds_never_shorter_than_m2_clip():
     from src.clipper.production.deliver import pitch_bounds
     e = dict(EVENTS[0], clip_start=0.05)  # M2 clip already starts at the cut
     assert pitch_bounds(e, SHOTS[0], [e])[0] == 0.05
+
+
+def test_pitch_bounds_end_clear_of_late_shot_end():
+    # shots are cut on a 5 fps grid, so the real cut can be 0.2 s before
+    # the detected end: stay 0.25 s clear even if M2's clip runs closer
+    from src.clipper.production.deliver import pitch_bounds
+    shot = {"shot_id": "s000", "start": 0.0, "end": 6.0}
+    e = dict(EVENTS[0], clip_end=5.95)
+    assert pitch_bounds(e, shot, [e])[1] == 5.75
+
+
+def test_refuses_pitch_with_hidden_cut_and_leaves_nothing(tmp_path):
+    import pytest
+    from src.clipper.production.deliver import deliver_source
+    root, man = _fake_run(tmp_path, cut_at=50)  # cut at 5.0 s inside p001 (1.0-5.7)
+    dest = tmp_path / "handoff"
+    with pytest.raises(RuntimeError, match="hard cut"):
+        deliver_source(root, man, str(dest), "test-pitcher", "RID")
+    assert not (dest / "test-pitcher" / "RID_vid1").exists()
+    assert not (dest / "index.jsonl").exists()
 
 
 def test_batch_files_facts_and_checks(tmp_path):
