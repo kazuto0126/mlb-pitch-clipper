@@ -33,6 +33,21 @@ def _run_ytsearch(query: str, limit: int, retries: int = 2) -> list[dict]:
     return []
 
 
+def fetch_url(url: str, retries: int = 2) -> dict | None:
+    """Metadata of one operator-chosen video (never downloads)."""
+    cmd = ["yt-dlp", url, "--dump-json", "--skip-download", "--no-playlist",
+           "--quiet", "--no-warnings"]
+    last_err = ""
+    for _ in range(retries + 1):
+        try:
+            return json.loads(subprocess.check_output(cmd, text=True, timeout=180))
+        except Exception as e:
+            last_err = str(e)[:200]
+            time.sleep(3)
+    print(f"[discovery] url failed: {url!r} ({last_err})")
+    return None
+
+
 def fetch_candidates(queries: list[dict]) -> list[dict]:
     """Raw per-(query, video) hits. Dedup happens in dedup.py."""
     hits: list[dict] = []

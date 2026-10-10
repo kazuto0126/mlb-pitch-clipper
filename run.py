@@ -108,6 +108,9 @@ def main() -> None:
     ap.add_argument("--deliver-to", default=None,
                     help="hand-off folder shared with a downstream project "
                          "(see docs/HANDOFF_CONTRACT.md)")
+    ap.add_argument("--source-url", action="append", default=None,
+                    help="use this video instead of the search (repeatable, "
+                         "in order); all later gates still apply")
     ap.add_argument("--throws", choices=("R", "L", "unknown"), default="unknown",
                     help="pitching hand, provided by the operator (written to "
                          "every delivered pitch; never inferred from video)")
@@ -166,23 +169,44 @@ def production_exclusion(s: dict) -> str | None:
 DISCOVERY_OVERFETCH = 2
 
 
+def operator_sources(urls: list[str]) -> list[dict]:
+    """Sources named by the operator (e.g. official long-form videos the
+    search ranks too low), in the given order. Everything after discovery
+    (exclusions, preview gate, production, >= 3 clips) still applies."""
+    from src.clipper.discovery import fetch
+    from src.clipper.discovery.select import enrich
+    out = []
+    for u in urls:
+        meta = fetch.fetch_url(u)
+        if meta:
+            meta["_query_source"] = "operator --source-url"
+            out.append(enrich(meta))
+    return out
+
+
 def _run_chain(args, rid: str, root: Path):
-    # 1. discovery (frozen M3)
-    disc = run_discovery(args.pitcher, out_root=str(Path(args.out_root) / "discovery"),
-                         top_n=args.top_n * DISCOVERY_OVERFETCH, run_id=rid)
-    selected = json.loads(Path(disc["out_dir"], "selected_sources.json")
-                          .read_text(encoding="utf-8"))
+    # 1. discovery (frozen M3), or the operator's own URLs
+    urls = getattr(args, "source_url", None)
+    if urls:
+        selected = operator_sources(urls)
+    else:
+        disc = run_discovery(args.pitcher, out_root=str(Path(args.out_root) / "discovery"),
+                             top_n=args.top_n * DISCOVERY_OVERFETCH, run_id=rid)
+        selected = json.loads(Path(disc["out_dir"], "selected_sources.json")
+                              .read_text(encoding="utf-8"))
+    source_mode = "operator_urls" if urls else "discovery"
     if args.year is not None:
         filt = [s for s in selected if year_filter_ok(s, args.year)]
         selected = filt or selected
     excluded = {s["video_id"]: why for s in selected
                 if (why := production_exclusion(s))}
-    eligible = [s for s in selected if s["video_id"] not in excluded][:args.top_n]
+    eligible = [s for s in selected if s["video_id"] not in excluded]
+    eligible = eligible if urls else eligible[:args.top_n]
     if not eligible:
         manifest = {"pitcher": args.pitcher, "run_id": rid, "status": "no_suitable_source",
                     "reason": "no eligible single-pitcher MLB source in discovery",
                     "milestone": 7,
-                    "discovery": {"candidate_count": len(selected),
+                    "discovery": {"mode": source_mode, "candidate_count": len(selected),
                                   "selected_count": 0, "excluded": excluded}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
@@ -203,7 +227,7 @@ def _run_chain(args, rid: str, root: Path):
                     "reason": "preview gate admitted no source",
                     "milestone": 7,
                     "source_selection_mode": mode,
-                    "discovery": {"candidate_count": len(selected),
+                    "discovery": {"mode": source_mode, "candidate_count": len(selected),
                                   "selected_count": 0, "excluded": excluded}}
         (root / "run_manifest.json").write_text(json.dumps(manifest, indent=2),
                                                 encoding="utf-8")
@@ -241,7 +265,7 @@ def _run_chain(args, rid: str, root: Path):
         "pitcher": args.pitcher, "run_id": rid,
         "created_utc": _dt.datetime.now(_dt.timezone.utc).isoformat(),
         "milestone": 7, "source_selection_mode": mode,
-        "discovery": {"candidate_count": len(selected),
+        "discovery": {"mode": source_mode, "candidate_count": len(selected),
                       "selected_count": len(pool), "excluded": excluded},
         "sources_attempted": [m.get("video_id") for m in results],
         "status": status,

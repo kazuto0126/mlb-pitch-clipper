@@ -192,6 +192,39 @@ def test_run_chain_refills_after_exclusions(tmp_path, monkeypatch):
     assert list(m["discovery"]["excluded"]) == ["game"]
 
 
+def test_run_chain_uses_operator_urls_without_search(tmp_path, monkeypatch):
+    import pytest
+    import run
+    from src.clipper.discovery import fetch
+    metas = {"u1": {"id": "v1", "title": "Tyler Glasnow tosses EIGHT DOMINANT innings",
+                    "channel": "MLB", "duration": 1091, "upload_date": "20250601"},
+             "u2": {"id": "v2", "title": "FULL GAME: Dodgers vs. Padres",
+                    "channel": "MLB", "duration": 10000, "upload_date": "20250601"},
+             "u3": {"id": "v3", "title": "Tyler Glasnow struck out ELEVEN Padres batters",
+                    "channel": "MLB", "duration": 1104, "upload_date": "20250601"}}
+    previewed = {}
+
+    def fake_preview(slug, sel_path, out_root, max_sources, run_id):
+        previewed["ids"] = [s["video_id"] for s in json.loads(Path(sel_path).read_text(encoding="utf-8"))]
+        d = Path(out_root) / "p"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "source_preview_report.json").write_text("[]", encoding="utf-8")
+        return {"out_dir": str(d)}
+
+    monkeypatch.setattr(fetch, "fetch_url", lambda u: dict(metas[u]) if u in metas else None)
+    monkeypatch.setattr(run, "run_discovery", lambda *a, **k: pytest.fail("search must be skipped"))
+    monkeypatch.setattr(run, "run_preview", fake_preview)
+    root = tmp_path / "out" / "p" / "rid"
+    (root / "sources").mkdir(parents=True)
+    run._run_chain(SimpleNamespace(pitcher="P", top_n=1, max_sources=3, year=None,
+                                   out_root=str(tmp_path / "out"),
+                                   source_url=["u1", "u2", "missing", "u3"]), "rid", root)
+    m = json.loads((root / "run_manifest.json").read_text(encoding="utf-8"))
+    assert m["discovery"]["mode"] == "operator_urls"
+    assert list(m["discovery"]["excluded"]) == ["v2"]  # full game still excluded
+    assert previewed["ids"] == ["v1", "v3"]  # operator order, not cut by --top-n
+
+
 def test_run_chain_falls_through_tiers_and_enforces_minimum(tmp_path, monkeypatch):
     import run
     selected = [_src("bord"), _src("ins_low"), _src("ins_good")]
