@@ -68,6 +68,15 @@ def test_competition_context():
     assert cc("Bullpen session day 3", channel="Fan") == "non_mlb"
     assert cc("NPB highlights reel") == "non_mlb"
     assert cc("Some random compilation", channel="Random") == "unknown"
+    # relief appearances are games, bullpen sessions are not
+    assert cc("EVERY PITCH of Roki Sasaki's dominant start to the Postseason",
+              "Roki Sasaki has been sensational for the Dodgers out of the bullpen "
+              "so far during the Postseason", channel="MLB") == "mlb"
+    assert cc("Roki Sasaki was DOMINANT out of the ‘pen vs. the Phillies",
+              "came on from the bullpen", channel="MLB") == "mlb"
+    assert cc("Yu Darvish Bullpen- Fenway Park August 6, 2012",
+              channel="Bullpen Videos") == "non_mlb"
+    assert cc("WBC: Sasaki out of the bullpen", channel="MLB") == "non_mlb"
 
 
 def test_wbc_excluded_from_production():

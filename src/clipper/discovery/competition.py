@@ -27,11 +27,14 @@ _MLB = [
     r"inning", r"shutout", r"complete game", r"full outing",
     r"every pitch", r"full start", r"full game",
 ]
+# In-game relief wording, not a bullpen session ("out of the bullpen" in
+# the MLB description of Roki Sasaki's postseason every-pitch video).
+_RELIEF = r"\b(out of|from) the (bullpen|['‘’]pen)\b"
 
 
 def classify_competition(title: str, description: str = "",
                          channel: str = "") -> str:
-    text = f"{title}\n{description}".lower()
+    text = re.sub(_RELIEF, " ", f"{title}\n{description}".lower())
     if any(re.search(p, text) for p in _NON_MLB):
         return "non_mlb"
     game_text = f"{title}\n{channel}".lower()
