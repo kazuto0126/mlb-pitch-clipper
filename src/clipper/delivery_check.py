@@ -12,11 +12,12 @@ fixed pitcher box / (pitcher box + batter box), summed over
 [motion_onset, settle_time]. Broad fixed geometry only: no person
 detection, tracking, body parts or identity (same signal family as M2).
 
-Evidence (validation/regression_cases/m7_7_delivery_check/): 63 audited
-events from 10 sources. No-delivery events with p_frac < 0.44 sit at
-0.283-0.420 and every delivered pitch at >= 0.457. Rejects 8/13
-no-delivery events and 0/45 delivered pitches; the rest overlap with
-deliveries and are left to the operator audit.
+Evidence (validation/regression_cases/m7_7_delivery_check/): 99 audited
+events from 15 sources. Left-handed pitchers' deliveries sit lower (median
+0.56 vs 0.62; Blake Snell 0.426), so the cut sits mid-gap at 0.40: caught
+no-delivery events at <= 0.367, every delivered pitch at >= 0.426.
+Rejects 9/17 no-delivery events and 0/63 deliveries; the rest overlap
+with deliveries and are left to the operator audit.
 """
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ import numpy as np
 
 PITCHER_BOX = (0.19, 0.50, 0.35, 0.82)  # x0, x1, y0, y1 (fractions of frame)
 BATTER_BOX = (0.50, 0.81, 0.10, 0.55)
-DELIVERY_MIN_PFRAC = 0.44
+DELIVERY_MIN_PFRAC = 0.40
 DELIVERY_SHORT_ACTIVE = 1.4  # s; a short event needs a larger pitcher share
 DELIVERY_SHORT_MIN_PFRAC = 0.48
 SAMPLE_FPS = 10.0

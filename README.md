@@ -306,8 +306,10 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
 - 特徵：中外野構圖固定（投手在打者左下方）。在兩個固定框內比較 M2 同類的
   動作能量（幀差＋光流）：`pitcher_share` = 投手框 /（投手框＋打者框）。
   不偵測人、不追蹤、無身體部位或身分特徵。
-- 新規則（僅 production、M2 之後、剪輯之前）：`pitcher_share < 0.44`，或
+- 新規則（僅 production、M2 之後、剪輯之前）：`pitcher_share < 0.40`，或
   事件短於 1.4 秒且 `< 0.48` → `no_delivery_suspected`；讀不到的事件保留。
-- 63 顆已標記事件（10 來源）：擋下 13 顆中的 8 顆，已交付的 45 顆好球
-  0 顆被擋；最接近門檻的好球仍有 0.017 的距離。其餘 5 顆與好球重疊，留給
-  人工檢查。交付規格的 `pitch_delivery_visible` 仍為 not_verified。
+- 原門檻 0.44 在 Blake Snell（左投）誤擋 1 顆好球（0.426）：左投的投球動作
+  比例普遍較低（中位數 0.56，右投 0.62）。改為兩類之間的中點 0.40。
+- 99 顆已標記事件（15 來源）：擋下 17 顆中的 9 顆，63 顆好球 0 顆被擋；
+  兩側距離約 0.03。其餘與好球重疊，留給人工檢查。交付規格的
+  `pitch_delivery_visible` 仍為 not_verified。

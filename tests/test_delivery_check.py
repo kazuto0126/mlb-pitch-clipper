@@ -41,7 +41,8 @@ def test_share_follows_where_the_motion_is(tmp_path):
 
 def test_reason_rules():
     from src.clipper.delivery_check import no_delivery_reason
-    assert no_delivery_reason(0.42, 3.0)            # batter area dominates
+    assert no_delivery_reason(0.38, 3.0)            # batter area dominates
+    assert no_delivery_reason(0.43, 3.0) is None    # a left-hander's delivery
     assert no_delivery_reason(0.46, 1.0)            # short, no pitcher dominance
     assert no_delivery_reason(0.46, 2.0) is None    # long enough at 0.46
     assert no_delivery_reason(0.50, 1.0) is None    # short but pitcher moves

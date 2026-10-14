@@ -679,5 +679,105 @@
   "pitcher_share": 0.6847,
   "vetoed": false,
   "audit": "after adoption: hard cut inside the clip"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": null,
+  "event_id": "p001",
+  "label": "delivery_bad_bounds",
+  "active_sec": 1.1,
+  "pitcher_share": 0.3391,
+  "vetoed": true,
+  "audit": "after adoption: full delivery but only ~0.3 s of set (shot starts there)"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": null,
+  "event_id": "p002",
+  "label": "no_delivery",
+  "active_sec": 2.2,
+  "pitcher_share": 0.3672,
+  "vetoed": true,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": null,
+  "event_id": "p003",
+  "label": "delivery",
+  "active_sec": 3.4,
+  "pitcher_share": 0.426,
+  "vetoed": true,
+  "audit": "after adoption: MIS-VETO, complete delivery with 1.8 s set"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": null,
+  "event_id": "p010",
+  "label": "no_delivery",
+  "active_sec": 0.5,
+  "pitcher_share": 0.3519,
+  "vetoed": true,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 1,
+  "event_id": "p004",
+  "label": "delivery",
+  "active_sec": 2.6,
+  "pitcher_share": 0.4638,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 2,
+  "event_id": "p005",
+  "label": "delivery",
+  "active_sec": 2.7,
+  "pitcher_share": 0.4522,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 3,
+  "event_id": "p006",
+  "label": "delivery",
+  "active_sec": 4.61,
+  "pitcher_share": 0.4714,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 4,
+  "event_id": "p007",
+  "label": "delivery",
+  "active_sec": 1.9,
+  "pitcher_share": 0.5285,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 5,
+  "event_id": "p008",
+  "label": "delivery",
+  "active_sec": 1.7,
+  "pitcher_share": 0.4536,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "blake-snell/20261014T124935Z/sources/1mkD0gDE7HE",
+  "kept_index": 6,
+  "event_id": "p009",
+  "label": "delivery",
+  "active_sec": 5.01,
+  "pitcher_share": 0.5815,
+  "vetoed": false,
+  "audit": "after adoption"
  }
 ]

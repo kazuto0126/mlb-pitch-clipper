@@ -65,5 +65,13 @@ The hand-off contract keeps `pitch_delivery_visible` as `not_verified`.
   after the pitch, so dropping them is right. 0 vetoes in the third
   source. No delivered pitch was vetoed in the 3 new sources (11 kept
   deliveries at 0.472-0.748).
+- Blake Snell (1mkD0gDE7HE, left-handed): 4 vetoes — 2 correct
+  (no delivery), 1 MIS-VETO of a complete delivery (0.426), 1 complete
+  delivery with only ~0.3 s of set because the shot starts there (0.339,
+  bad bounds). Left-handers' deliveries sit lower (median 0.56 vs 0.62
+  for right-handers), so the 0.44 cut had no real margin for them.
+  **Cut changed to 0.40** (mid-gap between the highest caught no-delivery
+  event, 0.367, and the lowest delivery, 0.426). On all 99 labelled
+  events: 9/17 no-delivery caught (was 10), 0/63 deliveries lost (was 1).
 - Rejected events now keep their full event (times, share) in
   rejected_events.json for the audit.
