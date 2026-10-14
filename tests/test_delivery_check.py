@@ -64,3 +64,4 @@ def test_veto_moves_events_and_records_why(tmp_path):
     rej = json.loads((d / "rejected_events.json").read_text(encoding="utf-8"))
     assert [x["reject_reason"] for x in rej] == ["x", "no_delivery_suspected"]
     assert rej[1]["detail"].startswith("p001: pitcher area quiet")
+    assert rej[1]["event"]["motion_onset"] == 1.0 and rej[1]["event"]["pitcher_share"] < 0.2

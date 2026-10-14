@@ -494,5 +494,60 @@
   "active_sec": 1.2,
   "pitcher_share": 0.5636,
   "vetoed": false
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": 1,
+  "label": "no_delivery",
+  "active_sec": 4.0,
+  "pitcher_share": 0.5589,
+  "vetoed": false,
+  "audit": "after adoption (left-handed batter)"
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": 2,
+  "label": "delivery",
+  "active_sec": 1.9,
+  "pitcher_share": 0.7063,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": 3,
+  "label": "delivery",
+  "active_sec": 0.7,
+  "pitcher_share": 0.5215,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": 4,
+  "label": "delivery",
+  "active_sec": 2.2,
+  "pitcher_share": 0.6621,
+  "vetoed": false,
+  "audit": "after adoption"
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": 5,
+  "label": "no_delivery",
+  "active_sec": 2.6,
+  "pitcher_share": 0.4532,
+  "vetoed": false,
+  "audit": "after adoption (left-handed batter)"
+ },
+ {
+  "source": "paul-skenes/20261014T115648Z/sources/YWXd-ZXNkcc",
+  "kept_index": null,
+  "event_id": "p006",
+  "label": "wrong_view",
+  "active_sec": 1.3,
+  "pitcher_share": 0.434,
+  "vetoed": true,
+  "audit": "after adoption: home-plate-side view of a play"
  }
 ]

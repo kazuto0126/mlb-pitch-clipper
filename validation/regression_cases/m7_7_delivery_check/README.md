@@ -51,3 +51,14 @@ deliveries rejected).
 Known limits: assumes the standard offset CF camera (pitcher left of the
 batter); a straight-on camera would split the pitcher across both boxes.
 The hand-off contract keeps `pitch_delivery_visible` as `not_verified`.
+
+## After adoption
+
+- Paul Skenes (YWXd-ZXNkcc, 2026-10-14): the veto removed a home-plate-
+  side view of a play (share 0.434, correctly). Two no-delivery events
+  were missed (0.559, 0.453): the batter was left-handed and stands left
+  of the plate in the CF view, inside the pitcher box. A left-handed
+  batter can only raise the share, so the rule misses more often against
+  them but does not reject more deliveries. 3 deliveries kept (≥ 0.52).
+- Rejected events now keep their full event (times, share) in
+  rejected_events.json for the audit.

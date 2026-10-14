@@ -96,7 +96,8 @@ def apply_delivery_veto(m2_dir: str, video: str) -> dict:
         if why:
             rejected.append({"source_shot_id": e["source_shot_id"],
                              "reject_reason": "no_delivery_suspected",
-                             "detail": f"{e['event_id']}: {why}"})
+                             "detail": f"{e['event_id']}: {why}",
+                             "event": e})  # times kept for the operator audit
             vetoed.append(e["event_id"])
         else:
             kept.append(e)
