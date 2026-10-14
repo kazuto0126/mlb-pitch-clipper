@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 
 from ..acquisition.full_acquire import acquire_full
+from ..delivery_check import apply_delivery_veto
 from ..framing import apply_framing_veto
 from ..pipeline import run_pipeline as run_m1
 from ..run_m2 import run_m2
@@ -26,6 +27,7 @@ def _qsum(by_reason: dict, get):
         "rejected_end_incomplete": by_reason.get("end_incomplete", 0),
         "rejected_no_complete_pitch": by_reason.get("no_complete_pitch", 0),
         "rejected_discontinuity": by_reason.get("shot_discontinuity", 0),
+        "rejected_no_delivery": by_reason.get("no_delivery_suspected", 0),
     }
 
 
@@ -94,6 +96,8 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     # source with zero CF candidates goes straight to no-usable-clips.
     if cands:
         run_m2(m1out, video=src)
+        # M7.7: drop events where the pitcher never delivers
+        man["delivery_check"] = apply_delivery_veto(m1out, src)["status"]
     else:
         for name in ("events.json", "rejected_events.json"):
             (Path(m1out) / name).write_text("[]", encoding="utf-8")
@@ -110,6 +114,7 @@ def produce_source(pitcher_name: str, candidate: dict, source_dir: str,
     man["rejected_end_incomplete"] = by_reason.get("end_incomplete", 0)
     man["rejected_no_complete_pitch"] = by_reason.get("no_complete_pitch", 0)
     man["rejected_discontinuity"] = by_reason.get("shot_discontinuity", 0)
+    man["rejected_no_delivery"] = by_reason.get("no_delivery_suspected", 0)
     # 5. clip extraction (chronological)
     events.sort(key=lambda e: e["clip_start"])
     clips = []

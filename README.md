@@ -298,3 +298,16 @@ python run.py "Yoshinobu Yamamoto" [--top-n 3] [--year 2026] [--max-sources 3]
   重下載抽樣 20 支中 18 支非 CF，2 支真 CF 在 0.904/0.911（高於門檻）。
 - 已知限制：原型本身錯（隔網 fan footage）時無效，靠 preview 零 CF veto；
   剪輯插入的他場 CF 鏡頭可能被擋（本來就不是該場）。
+
+## M7.7 (Pitch-Delivery Check)
+- 證據（`validation/regression_cases/m7_7_delivery_check/`）：交付前人工檢查
+  最常擋下的錯誤是「投手沒有投球」（打者走出打擊區、捕手/主審移動、投手只是
+  站著或走下投手丘）。M2 逐鏡頭正規化，小動作也會被放大成「一次投球」。
+- 特徵：中外野構圖固定（投手在打者左下方）。在兩個固定框內比較 M2 同類的
+  動作能量（幀差＋光流）：`pitcher_share` = 投手框 /（投手框＋打者框）。
+  不偵測人、不追蹤、無身體部位或身分特徵。
+- 新規則（僅 production、M2 之後、剪輯之前）：`pitcher_share < 0.44`，或
+  事件短於 1.4 秒且 `< 0.48` → `no_delivery_suspected`；讀不到的事件保留。
+- 63 顆已標記事件（10 來源）：擋下 13 顆中的 8 顆，已交付的 45 顆好球
+  0 顆被擋；最接近門檻的好球仍有 0.017 的距離。其餘 5 顆與好球重疊，留給
+  人工檢查。交付規格的 `pitch_delivery_visible` 仍為 not_verified。

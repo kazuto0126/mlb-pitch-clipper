@@ -90,6 +90,8 @@ def _fake_production_stages(monkeypatch):
                         lambda src, dst: {"ok": True, "method": "reuse-original"})
     monkeypatch.setattr(run_source, "run_m1", m1)
     monkeypatch.setattr(run_source, "run_m2", m2)
+    monkeypatch.setattr(run_source, "apply_delivery_veto",
+                        lambda out, video: {"status": "applied", "checked": 0, "vetoed": []})
     monkeypatch.setattr(run_source, "extract_clip",
                         lambda src, s, e, dest: {"ok": True, "duration": e - s})
     monkeypatch.setattr(run_source, "dedup_clips",

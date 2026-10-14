@@ -68,8 +68,9 @@ CHECKS = {
                             "event; bounds stop short of other events in the "
                             "same shot"),
     "pitch_delivery_visible": ("not_verified", "the motion detector can fire on "
-                               "catcher/batter movement while the pitcher stands "
-                               "(seen in the M7.7 audit)"),
+                               "catcher/batter movement while the pitcher stands; "
+                               "M7.7 drops events whose motion stays in the "
+                               "batter area (about 2/3 of these), the rest remain"),
     "continuous_shot": ("verified_by_pipeline", "inside one detected shot "
                         "(end kept 0.25 s clear of the 5 fps cut grid); "
                         "transition guard on the shot; delivered file scanned "

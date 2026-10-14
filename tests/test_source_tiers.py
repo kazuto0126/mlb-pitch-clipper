@@ -97,6 +97,8 @@ def _stub_stages(monkeypatch, n_events, n_cands=1):
     monkeypatch.setattr(run_source, "normalize_media", lambda s, d: {"ok": True, "method": "x"})
     monkeypatch.setattr(run_source, "run_m1", m1)
     monkeypatch.setattr(run_source, "run_m2", m2)
+    monkeypatch.setattr(run_source, "apply_delivery_veto",
+                        lambda out, video: {"status": "applied", "checked": 0, "vetoed": []})
     monkeypatch.setattr(run_source, "extract_clip",
                         lambda src, s, e, dest: {"ok": True, "duration": e - s})
     monkeypatch.setattr(run_source, "dedup_clips", lambda c: {"kept": c, "removed": []})
