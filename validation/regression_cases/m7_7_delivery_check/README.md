@@ -60,5 +60,10 @@ The hand-off contract keeps `pitch_delivery_visible` as `not_verified`.
   of the plate in the CF view, inside the pitcher box. A left-handed
   batter can only raise the share, so the rule misses more often against
   them but does not reject more deliveries. 3 deliveries kept (≥ 0.52).
+- Paul Skenes (My9U1j4WMrg, -XgrkSgJSaY): 3 vetoes (0.23-0.32), all
+  clips that open mid-delivery — the event is the batter/catcher motion
+  after the pitch, so dropping them is right. 0 vetoes in the third
+  source. No delivered pitch was vetoed in the 3 new sources (11 kept
+  deliveries at 0.472-0.748).
 - Rejected events now keep their full event (times, share) in
   rejected_events.json for the audit.
